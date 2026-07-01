@@ -40,6 +40,15 @@ type Config struct {
 	OpenAITemperature      float64
 
 	BonusLockAt time.Time
+
+	// GOAT mini-game config (§14 / §18).
+	GameTokenTTL        time.Duration
+	GameDurationSlackMs float64
+	GameDistEpsM        float64
+	GameDistEpsFrac     float64
+	GameCoinMinSpacingM int
+	GameCoinSlack       int
+	GameMaxDistance     int
 }
 
 func (c Config) IsProduction() bool { return c.AppEnv == "production" }
@@ -79,6 +88,15 @@ func Load() (Config, error) {
 		OpenAISystemPromptFile: os.Getenv("OPENAI_SYSTEM_PROMPT_FILE"),
 		OpenAIModel:            getenv("OPENAI_MODEL", "gpt-4.1-mini-2025-04-14"),
 		OpenAITemperature:      getfloat("OPENAI_TEMPERATURE", 0.8),
+
+		// GOAT mini-game knobs (§14 defaults).
+		GameTokenTTL:        getduration("GAME_TOKEN_TTL", 10*time.Minute),
+		GameDurationSlackMs: getfloat("GAME_DURATION_SLACK_MS", 1500),
+		GameDistEpsM:        getfloat("GAME_DIST_EPS_M", 25),
+		GameDistEpsFrac:     getfloat("GAME_DIST_EPS_FRAC", 0.02),
+		GameCoinMinSpacingM: getint("GAME_COIN_MIN_SPACING_M", 300),
+		GameCoinSlack:       getint("GAME_COIN_SLACK", 3),
+		GameMaxDistance:     getint("GAME_MAX_DISTANCE", 0),
 	}
 	lockStr := getenv("BONUS_LOCK_AT", "2026-06-28T23:59:00+05:30")
 	lockAt, err := time.Parse(time.RFC3339, lockStr)
@@ -123,6 +141,26 @@ func getbool(key string, def bool) bool {
 	default:
 		return def
 	}
+}
+
+// getduration parses a Go duration string env var. Empty/unparseable falls back to def.
+func getduration(key string, def time.Duration) time.Duration {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	}
+	return def
+}
+
+// getint parses an integer env var. Empty/unparseable falls back to def.
+func getint(key string, def int) int {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
+	}
+	return def
 }
 
 func splitTrim(s string) []string {

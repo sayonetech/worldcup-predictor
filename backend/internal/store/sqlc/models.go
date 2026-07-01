@@ -254,6 +254,14 @@ type CelebrationView struct {
 	SeenAt  time.Time `json:"seen_at"`
 }
 
+type GameRun struct {
+	ID       int64     `json:"id"`
+	UserID   int64     `json:"user_id"`
+	Distance uint32    `json:"distance"`
+	Coins    uint32    `json:"coins"`
+	PlayedAt time.Time `json:"played_at"`
+}
+
 type Match struct {
 	ID                  int64         `json:"id"`
 	SourceID            int64         `json:"source_id"`

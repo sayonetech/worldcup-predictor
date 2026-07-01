@@ -56,7 +56,7 @@ export function Home({ mobileView }: HomeProps) {
       <div className="home__grid page">
         {/* LEFT: Bonus panel + Matches column */}
         <div className={`home__main main-left${activeMobileView === "ranks" ? " is-hidden-mobile" : ""}`}>
-          <section className="promo-banner-wrap" aria-label="Penalty Shootout">
+          <section className="promo-banner-wrap promo-banner-wrap--split" aria-label="Mini-games">
             <a
               className="promo-banner"
               href="https://d23okley85vr35.cloudfront.net/"
@@ -68,6 +68,20 @@ export function Home({ mobileView }: HomeProps) {
                 className="promo-banner__image"
                 src="/penalty-shootout-banner.png"
                 alt="Penalty Shootout. One kick. One chance. Be the hero."
+              />
+            </a>
+
+            <a
+              className="promo-banner promo-banner--goat"
+              href="/goat-game.html"
+              target="_blank"
+              rel="noreferrer"
+              aria-label="Play Chased by the GOAT in a new tab"
+            >
+              <img
+                className="promo-banner__image"
+                src="/goat-game-banner.png"
+                alt=""
               />
             </a>
           </section>

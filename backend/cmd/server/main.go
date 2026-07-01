@@ -14,6 +14,7 @@ import (
 	"github.com/sayonetech/worldcup-predictor/backend/internal/auth"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/chat"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/config"
+	"github.com/sayonetech/worldcup-predictor/backend/internal/game"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/httpapi"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/jobs"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/notify"
@@ -134,6 +135,17 @@ func main() {
 		Verifier:           auth.GoogleTokenVerifier{ClientID: cfg.GoogleClientID},
 		AllowedEmailDomain: cfg.AllowedEmailDomain,
 		Secure:             cfg.IsProduction(),
+		Game:               st,
+		GameTokens:         game.NewTokenManager(cfg.SessionSecret, cfg.GameTokenTTL, func() time.Time { return time.Now().UTC() }),
+		GameTokenTTL:       cfg.GameTokenTTL,
+		GameLimits: game.Limits{
+			DurationSlackMs: cfg.GameDurationSlackMs,
+			DistEpsM:        cfg.GameDistEpsM,
+			DistEpsFrac:     cfg.GameDistEpsFrac,
+			CoinMinSpacingM: cfg.GameCoinMinSpacingM,
+			CoinSlack:       cfg.GameCoinSlack,
+			MaxDistance:     cfg.GameMaxDistance,
+		},
 	}
 
 	router := httpapi.NewRouter(deps, !cfg.IsProduction())

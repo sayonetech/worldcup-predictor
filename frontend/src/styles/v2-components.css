@@ -86,6 +86,7 @@
   box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.38), inset 0 0 0 1px rgba(255,255,255,0.06);
   transform: translateY(-1px);
 }
+.promo-banner:focus-visible { outline: 2px solid var(--coral); outline-offset: 2px; }
 .promo-banner:hover::after {
   animation: promo-banner-sheen 0.75s ease;
 }
@@ -96,6 +97,82 @@
   object-fit: cover;
   filter: saturate(1.08) contrast(1.04);
 }
+
+/* ---------- Promo banner — 2-up split layout ---------- */
+.promo-banner-wrap--split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 560px) {
+  .promo-banner-wrap--split { grid-template-columns: 1fr; }
+}
+
+/* Fallback text card when banner art is not yet available */
+.promo-banner--goat .promo-banner__fallback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  gap: 6px;
+  padding: 0 16px;
+  /* Relative so text sits above the ::before gloss layer */
+  position: relative;
+  z-index: 3;
+}
+.promo-banner__fallback-title {
+  font-family: var(--font-display);
+  font-size: clamp(15px, 2vw, 18px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-align: center;
+}
+.promo-banner__fallback-sub {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-2);
+  text-align: center;
+}
+
+/* ---------- Standalone game page (goat-game.html) ---------- */
+.game-page {
+  width: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 16px 48px;
+}
+.game-page--center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 0 16px;
+}
+.game-page__unauth {
+  text-align: center;
+}
+.game-page__back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 13px 24px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--brand) 15%, transparent);
+  border: 1px solid color-mix(in oklch, var(--brand) 35%, transparent);
+  color: var(--brand);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.16s, border-color 0.16s;
+}
+.game-page__back-link:hover {
+  background: color-mix(in oklch, var(--brand) 24%, transparent);
+  border-color: color-mix(in oklch, var(--brand) 55%, transparent);
+}
+
 .role-switch { display: flex; align-items: center; gap: 2px; padding: 3px; background: var(--control-track); border-radius: var(--r-pill); }
 .role-switch button { padding: 6px 13px; border-radius: var(--r-pill); font-size: 12.5px; font-weight: 600; color: var(--text-2); display: flex; align-items: center; gap: 5px; transition: 0.15s; }
 .role-switch button .ic { font-size: 13px; display: grid; place-items: center; }
@@ -758,6 +835,8 @@
   .thunder-bg {
     opacity: 0.5; filter: brightness(0.65) saturate(1.05);
   }
+  /* Disable GOAT card sheen (§7 — no animation under reduced motion) */
+  .promo-banner--goat { transition: none; }
 }
 
 /* ============================================================

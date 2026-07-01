@@ -6,6 +6,10 @@ FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
 COPY package.json pnpm-lock.yaml .npmrc ./
+# The game bundle is a vendored local tarball referenced via `file:` in
+# package.json, so it must be present in the build context BEFORE install
+# resolves the lockfile (otherwise pnpm install fails with ENOENT).
+COPY goat-game ./goat-game
 RUN pnpm install --frozen-lockfile
 COPY . .
 # Vite inlines VITE_* at BUILD time, so they must be present here (not at runtime).

@@ -1,0 +1,58 @@
+{
+  "_comment": "email (any case) -> full country name from the bundle's accepted list: Argentina, Brasil/Brazil, Germany, Netharland/Netherlands/Holland, Spain, Portugal, France, Belgium. Unknown/blank -> neutral flag. Keys without '@' are ignored. NOTE: 'England' is NOT a bundle-supported flag, so those rows render the neutral flag (and the backend logs a warning at startup).",
+
+  "joslin@sayonetech.com": "Germany",
+  "ribin@becomap.com": "Germany",
+  "jubin@sayonetech.com": "Germany",
+  "ariyasreekumar@sayonetech.com": "Germany",
+  "ranju@sayonetech.com": "Germany",
+  "akhil.sundar@sayonetech.com": "Germany",
+  "arjun@sayonetech.com": "Germany",
+
+  "kiran@sayonetech.com": "Argentina",
+  "safeeda@sayonetech.com": "Argentina",
+  "ameen@sayonetech.com": "Argentina",
+  "karthik@claimsconcierge.io": "Argentina",
+  "devikadinesh@sayonetech.com": "Argentina",
+  "duena@sayonetech.com": "Argentina",
+  "hiba.kareem@sayonetech.com": "Argentina",
+  "suneesh@sayonetech.com": "Argentina",
+  "mithin@sayonetech.com": "Argentina",
+  "aneetakgeorge@sayonetech.com": "Argentina",
+  "vaishak@becomap.com": "Argentina",
+  "yadu@sayonetech.com": "Argentina",
+  "atley@sayonetech.com": "Argentina",
+  "praveen@sayonetech.com": "Argentina",
+  "jeena@sayonetech.com": "Argentina",
+  "gokuldas@sayonetech.com": "Argentina",
+  "athulkrishnan.h@sayonetech.com": "Argentina",
+  "harlin@sayonetech.com": "Argentina",
+
+  "ananthakrishnan@becomap.com": "Portugal",
+  "alan@sayonetech.com": "Portugal",
+  "anjali.shaju@sayonetech.com": "Portugal",
+  "poornima.pillai@sayonetech.com": "Portugal",
+  "riya@becoai.com": "Portugal",
+  "nandana.s@sayonetech.com": "Portugal",
+  "aksharasurendran@sayonetech.com": "Portugal",
+  "benshaaugestin@gmail.com": "Portugal",
+  "daphine@sayonetech.com": "Portugal",
+  "krishna@sayonetech.com": "Portugal",
+  "sarath@sayonetech.com": "Portugal",
+
+  "sidharth@sayonetech.com": "France",
+
+  "hiren@sayonetech.com": "Belgium",
+
+  "abhinav@sayonetech.com": "Spain",
+  "nijo@sayonetech.com": "Spain",
+  "nidhin@sayonetech.com": "Spain",
+
+  "jibu.joseph@sayonetech.com": "England",
+  "aqeel@sayonetech.com": "England",
+
+  "hari@sayonetech.com": "Brazil",
+  "real@sayonetech.com": "Brazil",
+  "renjith@sayonetech.com": "Brazil",
+  "jomin@sayonetech.com": "England"
+}

@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.0",
+    "chased-by-the-goat": "file:goat-game/chased-by-the-goat-1.0.0.tgz",
     "flag-icons": "^7.5.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"

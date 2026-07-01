@@ -107,6 +107,40 @@ func TestRateLimitIP_AuthRetryAfter(t *testing.T) {
 	}
 }
 
+// TestRateLimitUser_LimitsGETPerUser asserts that rateLimitUser (used on
+// GET /api/game/leaderboard) 429s the same user after their burst is exhausted,
+// while a different user passes — and that GET requests ARE counted (unlike
+// rateLimitWrites which skips them).
+func TestRateLimitUser_LimitsGETPerUser(t *testing.T) {
+	kl := newKeyedLimiter(rate.Limit(0.0001), 2) // ~never refills; burst 2
+	h := rateLimitUser(kl)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(200) }))
+	do := func(method string, id int64) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(method, "/api/game/leaderboard", nil)
+		req = ctxUser(req, id) // inject store.User{ID: id}
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		return rec
+	}
+	// Exhaust burst for user 1 with GET requests.
+	if do(http.MethodGet, 1).Code != 200 {
+		t.Fatal("1st GET for user 1 must pass")
+	}
+	if do(http.MethodGet, 1).Code != 200 {
+		t.Fatal("2nd GET for user 1 (within burst) must pass")
+	}
+	rec := do(http.MethodGet, 1)
+	if rec.Code != http.StatusTooManyRequests {
+		t.Fatalf("3rd GET same user → want 429, got %d", rec.Code)
+	}
+	if rec.Header().Get("Retry-After") == "" {
+		t.Error("429 must carry Retry-After header")
+	}
+	// Different user is isolated.
+	if do(http.MethodGet, 2).Code != 200 {
+		t.Fatal("first GET for user 2 must pass (isolated bucket)")
+	}
+}
+
 // TestKeyedLimiter_IdleSweep verifies the unbounded-growth guard: entries idle
 // for longer than limiterIdleTTL are removed during the next Allow call.
 func TestKeyedLimiter_IdleSweep(t *testing.T) {

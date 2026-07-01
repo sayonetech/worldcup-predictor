@@ -22,6 +22,13 @@ const (
 	chatRate  = rate.Limit(20.0 / 60.0) // ~20/min per user (bounds OpenAI spend)
 	chatBurst = 5
 
+	// gameReadRate / gameReadBurst throttle GET /api/game/leaderboard per user.
+	// The GET mints a single-use run token on every call, so it needs its own
+	// limiter (rateLimitWrites skips GET). ~30/min sustained, burst 10 — generous
+	// for real play, bounds token hoarding and seenJTI growth (§3.10 / §12).
+	gameReadRate  = rate.Limit(0.5) // 30/min per user
+	gameReadBurst = 10
+
 	limiterIdleTTL = 15 * time.Minute
 )
 
@@ -93,6 +100,26 @@ func rateLimitIP(kl *keyedLimiter) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !kl.Allow(clientIP(r)) {
+				tooMany(w, kl)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// rateLimitUser throttles ALL methods (including GET) by session user ID.
+// Use this for endpoints that issue tokens or incur server-side cost on every GET,
+// where rateLimitWrites (which skips GET/HEAD/OPTIONS) is insufficient.
+// Must run AFTER RequireAuth (needs the user in context).
+func rateLimitUser(kl *keyedLimiter) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			key := "anon"
+			if u, ok := userFromContext(r.Context()); ok {
+				key = strconv.FormatInt(u.ID, 10)
+			}
+			if !kl.Allow(key) {
 				tooMany(w, kl)
 				return
 			}

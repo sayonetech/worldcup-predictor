@@ -8,6 +8,7 @@ import (
 
 	"github.com/sayonetech/worldcup-predictor/backend/internal/auth"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/chat"
+	"github.com/sayonetech/worldcup-predictor/backend/internal/game"
 	"github.com/sayonetech/worldcup-predictor/backend/internal/store"
 )
 
@@ -58,6 +59,13 @@ type Deps struct {
 	Verifier           auth.TokenVerifier
 	AllowedEmailDomain string
 	Secure             bool // Secure flag on the cookie (false for local http)
+
+	// GOAT mini-game (§3.10 / §11)
+	Game         store.GameStore
+	GameTokens   *game.TokenManager
+	GameLimits   game.Limits
+	GameTokenTTL time.Duration
+	gameJTI      *seenJTI
 }
 
 func userFromContext(ctx context.Context) (store.User, bool) {

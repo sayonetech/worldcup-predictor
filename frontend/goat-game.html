@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chased by the GOAT — SayScore</title>
+
+    <!-- Favicons & PWA (assets in docs/brand, served from /public) -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#060913" />
+
+    <!-- Game page background: override the app's `--bg` token on <body> (see the
+         inline style attribute below) so tokens.css's `body { background: var(--bg) }`
+         renders it — no !important. The <style> here only carries a solid pre-hydration
+         fallback (avoids a white flash before tokens.css loads) and the margin reset.
+         No rigid height:100% — it would clip a tall game-over screen in landscape. -->
+    <style>
+      html,body{margin:0}
+      body{background:#050E22}
+    </style>
+  </head>
+  <!-- background-attachment:fixed is intentionally avoided (misbehaves in iOS landscape). -->
+  <body style="--bg:
+      radial-gradient(1000px 440px at 50% -10%, rgba(232,184,75,.30), transparent 60%),
+      radial-gradient(1100px 540px at 50% 112%, rgba(31,150,82,.22), transparent 58%),
+      linear-gradient(180deg, #0A1E40 0%, #050E22 100%);">
+    <div id="game-root"></div>
+    <script type="module" src="/src/game-main.tsx"></script>
+  </body>
+</html>

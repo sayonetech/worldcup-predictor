@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 )
 
 func TestLoadReadsEnvAndAppliesDefaults(t *testing.T) {
@@ -64,6 +65,46 @@ func TestLoadSeedDataDirDefault(t *testing.T) {
 	cfg, _ = Load()
 	if cfg.SeedDataDir != "/srv/data" {
 		t.Errorf("SeedDataDir override = %q, want /srv/data", cfg.SeedDataDir)
+	}
+}
+
+func TestConfig_GameDefaults(t *testing.T) {
+	// Required vars so Load() succeeds.
+	t.Setenv("SESSION_SECRET", "x")
+	t.Setenv("GOOGLE_CLIENT_ID", "y")
+	// Ensure GAME_* vars are unset so defaults apply.
+	_ = os.Unsetenv("GAME_TOKEN_TTL")
+	_ = os.Unsetenv("GAME_DURATION_SLACK_MS")
+	_ = os.Unsetenv("GAME_DIST_EPS_M")
+	_ = os.Unsetenv("GAME_DIST_EPS_FRAC")
+	_ = os.Unsetenv("GAME_COIN_MIN_SPACING_M")
+	_ = os.Unsetenv("GAME_COIN_SLACK")
+	_ = os.Unsetenv("GAME_MAX_DISTANCE")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.GameTokenTTL != 10*time.Minute {
+		t.Errorf("GameTokenTTL default = %v, want 10m", cfg.GameTokenTTL)
+	}
+	if cfg.GameDurationSlackMs != 1500 {
+		t.Errorf("GameDurationSlackMs default = %v, want 1500", cfg.GameDurationSlackMs)
+	}
+	if cfg.GameDistEpsM != 25 {
+		t.Errorf("GameDistEpsM default = %v, want 25", cfg.GameDistEpsM)
+	}
+	if cfg.GameDistEpsFrac != 0.02 {
+		t.Errorf("GameDistEpsFrac default = %v, want 0.02", cfg.GameDistEpsFrac)
+	}
+	if cfg.GameCoinMinSpacingM != 300 {
+		t.Errorf("GameCoinMinSpacingM default = %v, want 300", cfg.GameCoinMinSpacingM)
+	}
+	if cfg.GameCoinSlack != 3 {
+		t.Errorf("GameCoinSlack default = %v, want 3", cfg.GameCoinSlack)
+	}
+	if cfg.GameMaxDistance != 0 {
+		t.Errorf("GameMaxDistance default = %v, want 0", cfg.GameMaxDistance)
 	}
 }
 

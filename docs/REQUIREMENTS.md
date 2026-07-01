@@ -132,6 +132,41 @@ user gesture (browser autoplay rules). The **automatic** on-login celebration is
 **visual-only** — it auto-plays muted and resumes audio only if the user taps the overlay. This
 is intentional, not a defect.
 
+### 3.10 GOAT mini-game (engagement)
+
+SayScore embeds **Chased by the GOAT**, a self-contained arcade endless-runner, as a standalone
+engagement feature. It is **completely separate from predictions, scoring, and the prize
+leaderboards** — game results never affect points, weekly winners, the ₹500 prize, or the §5.1
+standings, and **no prize/payment data is attached to the game** (decision §17.1).
+
+- **Bundle**: ships as a prebuilt, dependency-free ESM bundle (`chased-by-the-goat`, vendored as a
+  packed tarball under `frontend/goat-game/`). Mounted via `mountGoatGame(container, config)`, it
+  renders inside a host-owned container and **never performs I/O itself** — the host owns all
+  persistence (see the bundle's `INTEGRATION.md`).
+- **Two metrics per run**: `distance` (metres survived, integer) and `coins` (collected this run,
+  integer ≥ 0). They are independent — coins do not add to distance.
+- **Two leaderboards**: a **distance board** ranked by each user's **best** run (`MAX(distance)`),
+  and a **coins board** ranked by each user's **lifetime pool** (`SUM(coins)` over all their runs).
+  Both cap at 20 rows and appear only inside the game's own screens (the bundle's landing/game-over
+  boards); they are **not** part of `GET /api/leaderboard`.
+- **Launch surface**: the game is opened from the **Predictions screen's top promo strip**, which is
+  split into two cards — the existing external **Penalty Shootout** link and a **Chased by the GOAT**
+  card that opens the game in a **new browser tab** at the standalone page `/goat-game.html` (exactly
+  like the external Penalty Shootout `<a target="_blank">`). The standalone page has a FIFA-World-Cup-style
+  dark background and reuses the same first-party session cookie and `/api/game/*` endpoints (same origin).
+  No nav tab.
+- **Saving**: each completed run fires the bundle's `onGameEnd`; the host persists it via
+  `POST /api/game/runs`. Storage is **append-only** (one `game_runs` row per run); the boards are
+  plain aggregates over those rows, never incremented in place — consistent with the
+  materialized-points philosophy (§5).
+- **Server-authoritative validation (anti-cheat)**: the score is computed in the browser, so every
+  run is validated server-side before it is stored — see **§18**.
+- **Auth & rate limiting**: both endpoints sit inside the `RequireAuth` group.
+  `GET /api/game/leaderboard` carries its **own** per-user rate limiter (separate from the write
+  limiter) because it mints a single-use run token on every call — this bounds token issuance
+  and `seenJTI` set growth (~30/min sustained, burst 10).
+  `POST /api/game/runs` inherits the per-user write rate limiter (§12).
+
 ---
 
 ## 4. Privacy of predictions
@@ -383,6 +418,7 @@ Indicative columns; refine in migrations.
 - **bonus_results**: `category` (PK), `ref_id` (the actual outcome, same polymorphic-by-category semantics as `bonus_predictions.ref_id`), set by admin after the tournament.
 - **weekly_results**: `id`, `user_id`, `week_start` (IST date), `points`, `is_winner` BOOL, `prize_paid` BOOL DEFAULT 0, `paid_at` DATETIME NULL. **UNIQUE(user_id, week_start)**.
 - **settings**: `key` (PK), `value`, `updated_at` — a generic key/value store; the application reads/writes only the **three allowlisted keys** `results_cron`, `weekly_cron`, `bonus_lock_at` (implemented, M8b — migration `0009`). **Precedence:** env/config values seed any missing key on boot (idempotent; never overwriting an existing row), and the `settings` table is the runtime source of truth thereafter.
+- **game_runs** (§3.10): `id`, `user_id` FK→`users(id)` (ON DELETE CASCADE), `distance` INT UNSIGNED, `coins` INT UNSIGNED DEFAULT 0, `played_at` TIMESTAMP (UTC). **Append-only — one row per completed run.** The §3.10 game boards are aggregates over this table (`MAX(distance)` and `SUM(coins)` per user); there are **no points/prize columns** — the game is off the prize path. Indexed on `user_id` and on `distance` (board ordering).
 - **audit_log** (optional): admin actions for traceability.
 
 ---
@@ -453,6 +489,11 @@ Chat (§3.9)
 
 - `POST /api/chat` — `RequireAuth`. Body: `{ "messages": [ { "role": "user"|"assistant", "content": "…" } ] }`. Trims to the last 20 messages, injects the server-side system prompt, and streams the OpenAI completion as SSE (`Content-Type: text/event-stream`). Each `data:` frame is a JSON-encoded token delta; `data: [DONE]` closes the stream; `event: error` frames carry mid-stream failures. Returns `401` when unauthenticated, `400` on bad JSON / empty messages / invalid role, `503` when `OPENAI_API_KEY` is unset or the streamer is unconfigured, `429` when the per-user chat rate limit is exceeded. The system prompt is **never** read from the request body.
 
+Game (§3.10)
+
+- `GET  /api/game/leaderboard` — `RequireAuth`. Returns both game boards, the caller's standing, and a fresh anti-cheat token: `{ "distance": [ { "user_id", "name", "avatar_url", "distance" } ], "coins": [ { "user_id", "name", "avatar_url", "coins" } ], "me": { "best_distance", "coin_pool" }, "run_token": "<signed>" }`. Each board is capped at 20 rows, sorted descending. `run_token` is a signed, single-use token (§18.2) the client arms the next run with.
+- `POST /api/game/runs` — `RequireAuth`. Body `{ "run_token", "distance", "coins", "duration_ms" }`. Validates the run **server-side** (§18): verifies the token (signature + single-use + TTL + caller match), then checks `distance` against the reproduced pacing curve and `coins` against the spawn cap. On success stores one `game_runs` row and returns `{ "best_distance", "coin_pool", "run_token": "<next>" }` (a fresh token to arm the next run). **`400`** on invalid JSON / missing or non-integer fields / negative values; **`403`** on a missing, malformed, expired, already-used, or caller-mismatched token; **`422`** when the reported score is inconsistent with the run (rejected as implausible — not stored). Inherits the per-user write rate limit (§12).
+
 Ops
 - `GET /healthz`
 
@@ -469,6 +510,7 @@ Ops
 - **Trusted-proxy note (M9):** the per-IP rate limiter keys on the client IP via chi `middleware.RealIP`, which reads `X-Forwarded-For` / `X-Real-IP` as set by the frontend nginx proxy (`frontend/nginx.conf`). In production the backend **MUST only be reachable via that proxy** (do **not** expose the backend port publicly) — otherwise `X-Forwarded-For` is client-spoofable. The rate limit is **best-effort throttling, not an authorization boundary**.
 - Others' predictions hidden until match lock (§4).
 - The manual job-trigger endpoint (`POST /api/admin/jobs/run`, §11) is an admin-only (`RequireAdmin`) route registered in all environments, so an authenticated admin can invoke a job in production; it is never reachable by non-admins.
+- **Game run validation (§3.10/§18):** game scores are client-computed, so `POST /api/game/runs` is server-authoritative. A **signed, single-use, short-TTL run token** (issued by `GET /api/game/leaderboard`) binds each submission to a server nonce, and the reported `distance` must match the server-reproduced pacing curve for the reported active duration (itself bounded by the server-measured token age), with `coins` bounded by the spawn cap. Implausible or unbound runs are rejected, never stored. This is **best-effort anti-cheat for an internal, no-stakes feature** (the game is off the prize path) — it raises the cost of forgery but is not a cryptographic guarantee; full server-side input-replay is deferred (§18.5).
 
 ---
 
@@ -532,7 +574,7 @@ Install once per clone with `lefthook install` (wired into the Makefile / postin
 
 ### Environment variables
 
-Backend: `APP_ENV`, `HTTP_PORT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAIL_DOMAIN=sayonetech.com`, `SEED_ADMIN_EMAILS`, `FOOTBALL_DATA_API_KEY`, `FOOTBALL_DATA_BASE_URL=https://api.football-data.org/v4`, `RESULTS_CRON=0 3,8,13 * * *`, `WEEKLY_CRON=0 9 * * 1`, `RESULTS_CRON_ENABLED=true`, `SLACK_WEBHOOK_URL` (optional), `BONUS_LOCK_AT=2026-06-28T23:59:00+05:30`, `TZ=Asia/Kolkata`, `OPENAI_API_KEY` (optional — chat disabled / 503 when unset), `OPENAI_SYSTEM_PROMPT_FILE` (path to a text file containing the chat system prompt; loaded at server start; supports `{{user_name}}`/`{{user_first_name}}` placeholders), `OPENAI_MODEL` (default `gpt-4.1-mini-2025-04-14`), `OPENAI_TEMPERATURE` (default `0.8`).
+Backend: `APP_ENV`, `HTTP_PORT`, `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `SESSION_SECRET`, `GOOGLE_CLIENT_ID`, `ALLOWED_EMAIL_DOMAIN=sayonetech.com`, `SEED_ADMIN_EMAILS`, `FOOTBALL_DATA_API_KEY`, `FOOTBALL_DATA_BASE_URL=https://api.football-data.org/v4`, `RESULTS_CRON=0 3,8,13 * * *`, `WEEKLY_CRON=0 9 * * 1`, `RESULTS_CRON_ENABLED=true`, `SLACK_WEBHOOK_URL` (optional), `BONUS_LOCK_AT=2026-06-28T23:59:00+05:30`, `TZ=Asia/Kolkata`, `OPENAI_API_KEY` (optional — chat disabled / 503 when unset), `OPENAI_SYSTEM_PROMPT_FILE` (path to a text file containing the chat system prompt; loaded at server start; supports `{{user_name}}`/`{{user_first_name}}` placeholders), `OPENAI_MODEL` (default `gpt-4.1-mini-2025-04-14`), `OPENAI_TEMPERATURE` (default `0.8`), and the GOAT mini-game knobs (§3.10/§18, all optional with conservative defaults): `GAME_TOKEN_TTL` (default `10m`), `GAME_DURATION_SLACK_MS` (default `1500`), `GAME_DIST_EPS_M` (default `25`), `GAME_DIST_EPS_FRAC` (default `0.02`), `GAME_COIN_MIN_SPACING_M` (default `300`, from the bundle's `MIN_COLLECTIBLE_SPACING_M` spawn gate), `GAME_COIN_SLACK` (default `3`), `GAME_MAX_DISTANCE` (default `0` = disabled until calibrated from live data). The run token is signed with the existing `SESSION_SECRET`.
 
 Frontend (Vite): `VITE_GOOGLE_CLIENT_ID`, `VITE_API_BASE_URL`.
 
@@ -579,6 +621,19 @@ All previously-open questions were resolved in the brainstorming session (2026-0
 - **Go module path** (§9) — `github.com/sayonetech/worldcup-predictor/backend`, confirmed.
 - **Frontend design skill** (§7) — the frontend is implemented with the `impeccable` design skill, treating §7 as its design contract.
 
+### 17.3 GOAT mini-game (post-M9 engagement feature, 2026-06-30)
+
+- **Added as net-new scope** beyond the M1–M9 core, with product sign-off. The embedded
+  **Chased by the GOAT** runner (§3.10) is an engagement toy, **kept entirely off the prize path**:
+  game scores have **no money/prize data**, do not feed `GET /api/leaderboard`, and never affect
+  weekly winners or §5.1 standings. The decision (over merging into the overall board) was explicit:
+  forgeable client scores must not sit next to the real ₹500 prize.
+- **Anti-cheat posture (§18):** server-authoritative validation of every run via a signed
+  single-use run token + reproduction of the bundle's pacing curve (Tier-2). Accepted as
+  **best-effort** for a no-stakes internal feature; full server-side input-replay (Tier-1) is
+  deferred. Tuning knobs are config (§14) and the absolute distance ceiling is calibrated from
+  live data post-launch.
+
 ### 17.2 Milestone 9 — ops/security hardening + CI (final milestone)
 
 - **Status: DONE.** M9 closed the remaining §12 security gaps and completed the §15 CI pipeline. With it, the project is **feature-complete and production-hardened across M1–M9** — (1) scaffold + SSO, (2) fixtures sync + IST list, (3) predictions + kickoff lock, (4) scoring engine, (5) results cron + points, (6) leaderboards, (7) tournament bonus + lock, (8) admin tools, (9) hardening + CI.
@@ -587,3 +642,108 @@ All previously-open questions were resolved in the brainstorming session (2026-0
 - **Trusted proxy (§12):** the per-IP limiter trusts `X-Forwarded-For`/`X-Real-IP` from the frontend nginx; in production the backend must only be reachable via that proxy.
 - **Secrets (§12):** `SESSION_SECRET` and `FOOTBALL_DATA_API_KEY` must be rotated before production.
 - **CI (§15):** fully implemented per `.github/workflows/ci.yml` — backend (`golangci-lint` + `go vet` + `go test` + `sqlc diff`), frontend (`eslint` + `tsc --noEmit` + `vitest` + `build`), and a build-only Docker job for both images.
+
+---
+
+## 18. GOAT mini-game — scoring & anti-cheat (§3.10)
+
+The mini-game's score is computed in the browser, so SayScore stores and ranks runs but trusts no
+client number until it is validated server-side. This section specifies the run lifecycle, the
+signed run token, and the pacing model the server uses to reproduce a run's distance. The
+authoritative source for the pacing constants is the bundle's `INTEGRATION.md` §8; this section
+mirrors it for the Go port.
+
+### 18.1 Run lifecycle (host-driven; the bundle does no I/O)
+
+1. The host renders the game and, when fetching the boards (`GET /api/game/leaderboard`), receives a
+   fresh **`run_token`**, which it passes into the bundle (`config.runToken`).
+2. The player plays. On game-over the bundle fires `onGameEnd` with `{ distance, coins, durationMs, runToken }`
+   — the token echoed verbatim; `durationMs` = **active simulation time**, excluding paused/backgrounded
+   time (the bundle pauses on tab-blur).
+3. The host submits `POST /api/game/runs` with those fields. The server validates (§18.2–18.4), stores
+   one `game_runs` row on success, and returns a **new** `run_token`.
+4. The host arms the next run with `handle.setRunToken(next)`. The bundle's "Run Again" restarts
+   locally and tokens are single-use, so each run needs a fresh token.
+
+### 18.2 Run token (provenance + anti-replay)
+
+A `run_token` is an HMAC-signed, single-use, short-lived bearer of `{ user_id, jti, issued_at }`,
+signed with the existing `SESSION_SECRET` (the same HMAC primitive as the auth cookie,
+`internal/auth`). On `POST /api/game/runs` the server:
+
+- verifies the HMAC signature (rejects forged tokens);
+- checks the token has not expired (TTL = `GAME_TOKEN_TTL`, default 10 min);
+- checks the `jti` has not been consumed — **single-use**, tracked in an in-memory TTL set
+  (consistent with the single-instance rate limiter; a restart clears it, which is acceptable);
+- checks `user_id` matches the authenticated caller.
+
+Any failing check → **`403`**; the run is not stored. The single-use `jti` prevents replaying one
+good run to inflate the coin pool (a `SUM`).
+
+### 18.3 Pacing validation (distance plausibility)
+
+The game is an **auto-runner**: the player controls only jump/duck, **not horizontal speed**, so
+distance is a near-deterministic function of active survival time. The server reproduces the
+bundle's exact pacing curve and rejects any distance inconsistent with the reported duration.
+
+Bound the duration first, so a client cannot claim more time than physically elapsed:
+
+```
+elapsed_ms = now − token.issued_at                              // server-measured, trusted
+bounded_ms = min(report.duration_ms, elapsed_ms + GAME_DURATION_SLACK_MS)
+expected   = paceDistance(bounded_ms)
+accept iff |report.distance − expected| ≤ EPS
+EPS        = max(GAME_DIST_EPS_M, GAME_DIST_EPS_FRAC × expected)
+```
+
+`EPS` absorbs the small, bounded divergence between the client's variable per-frame `dt` and the
+server's uniform integration; a fabricated distance is off by far more. A failing check → **`422`**.
+If `GAME_MAX_DISTANCE > 0`, also reject `distance > GAME_MAX_DISTANCE` (the calibrated absolute
+ceiling, §18.5).
+
+**Pacing model (port of bundle `INTEGRATION.md` §8).** Constants: `SPEED0=11`, `MAX_SPEED=27`,
+`HARD_MAX=35`, `ULTRA_MAX=43` (px / 60fps-frame); `ACCEL=0.0024`; `SCORE_RATE=0.035` (m per
+speed-unit·frame); `ULTRA_AT=10000` (m); `FRAME=1000/60` ms.
+
+Per-frame step — the tier is chosen from the *current* state, speed is bumped **first** (clamped to
+the tier cap), then distance accrues using the **updated** speed:
+
+```
+paceStep(speed, score, dt):
+  if   speed < MAX_SPEED:  cap, acc = MAX_SPEED,  ACCEL
+  elif score < ULTRA_AT:   cap, acc = HARD_MAX,   ACCEL*0.16
+  else:                    cap, acc = ULTRA_MAX,  ACCEL*0.42
+  speed = min(cap, speed + acc*dt)
+  score = score + speed*SCORE_RATE*dt
+  return speed, score
+```
+
+Total distance after `active_ms`: integrate from `(SPEED0, 0)` over `frames = active_ms/FRAME` — one
+`dt=1` step per whole frame plus one trailing `dt=frac` step — then `floor(score)`.
+
+**Reference points for the Go unit test** (from the bundle's worked table; `durationMs → metres`):
+`1000→23`, `2000→46`, `5000→119`, `10000→246`, `15000→380`, `20000→522`, `30000→829`, `60000→1930`,
+`90000→3303`, `120000→4939`, `180000→8454`, `300000→16357`, `600000→42306`.
+
+### 18.4 Coins validation
+
+Coins are player-collected, so they get a **band**, not an equality. The bundle gates collectible
+spawns by a **minimum spacing** (`MIN_COLLECTIBLE_SPACING_M = 300` m — no two coins spawn closer than
+that; the per-frame `COLLECTIBLE_SPAWN_CHANCE = 0.5` only *lowers* real density below this gate), so
+the hard ceiling is one coin per `GAME_COIN_MIN_SPACING_M` metres:
+
+```
+0 ≤ coins ≤ floor(distance / GAME_COIN_MIN_SPACING_M) + GAME_COIN_SLACK
+```
+
+A failing check → **`422`**. (Each collected coin is `+1` to `state.coins`; the legacy `BONUS_M`
+constant no longer affects distance/score, so coins are a pure count.)
+
+### 18.5 Residual & tuning
+
+With distance pinned to `paceDistance(duration)` and duration bounded by token age (≤ TTL), the
+maximum forgeable distance is `paceDistance(GAME_TOKEN_TTL)` — achievable only by holding a token
+open for that much real wall-clock time. Operators should set `GAME_TOKEN_TTL` to just above the
+longest plausible real run and, once live, set `GAME_MAX_DISTANCE` to an absolute ceiling calibrated
+from real leaderboard data. This is **best-effort anti-cheat for a no-stakes internal feature**;
+closing the residual entirely (server-side input replay) is **deferred**.

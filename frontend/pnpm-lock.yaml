@@ -11,6 +11,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.101.0
         version: 5.101.0(react@19.2.7)
+      chased-by-the-goat:
+        specifier: file:goat-game/chased-by-the-goat-1.0.0.tgz
+        version: file:goat-game/chased-by-the-goat-1.0.0.tgz
       flag-icons:
         specifier: ^7.5.0
         version: 7.5.0
@@ -605,6 +608,10 @@ packages:
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
+
+  chased-by-the-goat@file:goat-game/chased-by-the-goat-1.0.0.tgz:
+    resolution: {integrity: sha512-eQ/xfJCNkDwvW5i8yHtmj8eVWsdzlYjR0xdtmNQwRPpXqvNa0UI2uV3OWYLKkqfeyKVMxKIX/pU1lQQTMGNtKg==, tarball: file:goat-game/chased-by-the-goat-1.0.0.tgz}
+    version: 1.0.0
 
   combined-stream@1.0.8:
     resolution: {integrity: sha512-FQN4MRfuJeHf7cBbBMJFXhKSDq+2kAArBlmRBvcvFE5BB1HZKXtSFASDhdlz9zOYwxh8lDdnvmMOe/+5cdoEdg==}
@@ -1953,6 +1960,8 @@ snapshots:
   caniuse-lite@1.0.30001799: {}
 
   chai@6.2.2: {}
+
+  chased-by-the-goat@file:goat-game/chased-by-the-goat-1.0.0.tgz: {}
 
   combined-stream@1.0.8:
     dependencies:

@@ -9,6 +9,12 @@ import (
 // gated the dev-only job-run route, now registered in all environments); it is
 // kept so existing call sites/tests need no change.
 func NewRouter(d *Deps, _ bool) chi.Router {
+	// Initialise the in-memory JTI set for the GOAT game if it hasn't been set
+	// up already (e.g. in tests that call initGameJTISet directly).
+	if d.gameJTI == nil {
+		d.initGameJTISet()
+	}
+
 	r := chi.NewRouter()
 	// RealIP normalizes r.RemoteAddr from proxy headers so the per-IP auth limiter
 	// keys on the real client. SA1019 flags X-Forwarded-For spoofing risk; that's
@@ -23,9 +29,10 @@ func NewRouter(d *Deps, _ bool) chi.Router {
 	r.Get("/docs", GetDocs)
 	r.Get("/openapi.yaml", GetOpenAPISpec)
 
-	authLimiter := newKeyedLimiter(authRate, authBurst)
-	writeLimiter := newKeyedLimiter(writeRate, writeBurst)
-	chatLimiter := newKeyedLimiter(chatRate, chatBurst)
+	authLimiter     := newKeyedLimiter(authRate, authBurst)
+	writeLimiter    := newKeyedLimiter(writeRate, writeBurst)
+	chatLimiter     := newKeyedLimiter(chatRate, chatBurst)
+	gameReadLimiter := newKeyedLimiter(gameReadRate, gameReadBurst)
 
 	r.Route("/api", func(api chi.Router) {
 		api.Use(maxBodyBytes(maxBodyBytesLimit))
@@ -73,6 +80,13 @@ func NewRouter(d *Deps, _ bool) chi.Router {
 			priv.With(d.RequireAdmin).Post("/admin/jobs/run", d.PostRunJob)
 
 			priv.With(rateLimitWrites(chatLimiter)).Post("/chat", d.PostChat)
+
+			// GOAT mini-game (§3.10 / §11)
+			// GET issues a single-use run token on every call so it carries its own
+			// per-user rate limiter (rateLimitWrites skips GET). POST inherits the
+			// group-level write limiter (rateLimitWrites) applied above.
+			priv.With(rateLimitUser(gameReadLimiter)).Get("/game/leaderboard", d.GetGameLeaderboard)
+			priv.Post("/game/runs", d.PostGameRun)
 		})
 	})
 
