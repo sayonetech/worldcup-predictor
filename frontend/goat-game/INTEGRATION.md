@@ -290,9 +290,9 @@ The bundle presents **two screens**, identical on web and mobile:
    to the landing page with the updated standings; **Run Again** re-enters the game screen.
 
 ### Controls (same everywhere)
-- **Tap / click anywhere = Jump.** **Press-and-hold the lower part of the play area = Duck**
+- **Tap / click the RIGHT half of the play area = Jump; press-and-hold the LEFT half = Duck**
   (release to stand). On desktop the **keyboard** also works: `Space`/`↑` jump, `↓` duck. A brief
-  on-screen hint shows the two zones on the first run on touch devices.
+  on-screen hint flashes the two zones on the first run on touch devices.
 - Start/restart is **button-only** — tapping the poster/background never starts a run.
 
 ### Going full-screen
@@ -302,6 +302,9 @@ The bundle presents **two screens**, identical on web and mobile:
   **orientation-lock to landscape** where supported (Android Chrome). Where those are unavailable —
   notably **iPhone Safari** (no orientation-lock; Fullscreen API disabled on iPhone since iOS 17.4) —
   it falls back to a **faux-landscape 90° rotation** that fills the viewport.
+- The full-viewport surface is sized in **dynamic viewport units** (`dvh`/`dvw`, with `vh`/`vw`
+  fallbacks), so a showing/hiding mobile browser toolbar (the classic iOS `100vh` overflow) can
+  never clip or letterbox the game — it always fits the *visible* viewport.
 - Everything reverses on **`destroy()`** (and on ✕ / Esc / system-back): fullscreen exited (only if
   this instance owns it), orientation unlocked, all presentation classes removed — **zero residue**,
   scoped to the bundle's own root (never `document.body`).
@@ -322,11 +325,18 @@ The bundle presents **two screens**, identical on web and mobile:
   `allow="fullscreen"`. Same-origin iframes already permit it; cross-origin requires the explicit
   `allow`. The bundle cannot set this itself. Without it it **degrades gracefully** (CSS takeover on
   desktop; faux-landscape on phones).
-- **Transformed-ancestor caveat:** for the desktop CSS takeover and the iPhone faux-landscape to fill
-  the *real* viewport, avoid `transform` / `filter` / `perspective` / `contain:paint|layout|strict` on
-  **ancestors of the mount container** — any of those becomes the containing block for the fixed
-  full-viewport surface, so it won't fill the screen. (The real-fullscreen path on Android / iPad is
-  immune — the fullscreen element is in the top layer.)
+- **Transformed-ancestor caveat (mobile-critical):** the desktop CSS takeover and the iPhone
+  faux-landscape use a `position:fixed` full-viewport surface. Per the CSS spec, **any ancestor of the
+  mount container** carrying `transform`, `filter`, `backdrop-filter`, `perspective`,
+  `will-change: transform` (or `filter`/`perspective`), or `contain: paint|layout|strict` becomes the
+  *containing block* for that fixed surface — so the "fullscreen" game sizes to **that element instead
+  of the viewport** and won't fill the screen (on iPhone it can also clip). Keep the ancestry above
+  `container` free of those properties. **Android / iPad are immune** on the real-fullscreen path — the
+  fullscreen element is promoted to the browser's top layer — but **iPhone Safari has no element
+  fullscreen**, so it relies entirely on this fixed surface and is the case to test. Watch out for
+  these arriving *implicitly* via utility classes / component libraries (e.g. Tailwind `transform`,
+  `filter`, `backdrop-blur`, `blur`, `scale-*`; a Framer-Motion/animation wrapper; a
+  `will-change`-for-perf hint; a `contain` on a virtualized list).
 
 ---
 
