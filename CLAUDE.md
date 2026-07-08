@@ -184,7 +184,7 @@ are a vertical list grouped by IST date; leaderboard is a ranked table.
 
 **Background layer (shimmer-stage):** `index.html` uses a `.shimmer-stage` container (fixed, z-index 0)
 that holds a looping `<video class="thunder-bg">` (bg.webm) and three `<img class="shimmer-img">` background
-assets (Neymar, France 2018 trophy, Germany 2014 trophy). A CSS `shimmer-mask-sweep` animation sweeps a
+assets (Argentina 2022 trophy, France 2018 trophy, Germany 2014 trophy). A CSS `shimmer-mask-sweep` animation sweeps a
 diagonal gradient mask across the stage every 6 s; inline JS listens for `animationiteration` and
 cycles active child (video → trophy imgs in sequence) at the dark-pause boundary so the swap is
 invisible. The `.thunder-flash` div is now a plain vignette overlay (z-index 1, no animation). Under
