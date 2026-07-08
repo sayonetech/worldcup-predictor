@@ -57,6 +57,7 @@ interface Shot {
   duration: number;
   trailLength: number;
   spinDirection: 1 | -1;
+  stampPoint?: Point;
 }
 
 const DURATION_MS = 720;
@@ -149,6 +150,7 @@ function AnimatedShot({ shot, onComplete }: { shot: Shot; onComplete: (id: numbe
   const ballRef = useRef<HTMLImageElement>(null);
   const forceRef = useRef<HTMLSpanElement>(null);
   const wallRef = useRef<HTMLSpanElement>(null);
+  const stampRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const element = shotRef.current;
@@ -246,6 +248,24 @@ function AnimatedShot({ shot, onComplete }: { shot: Shot; onComplete: (id: numbe
         wallRef.current.style.opacity = String(forcePulse * 0.72);
         wallRef.current.style.transform = `translateY(-50%) scaleY(${0.4 + forcePulse * 0.9})`;
       }
+      if (stampRef.current && shot.stampPoint && impactTime >= 0) {
+        const since = elapsed - impactTime;
+        const appear = Math.min(1, Math.max(0, since) / 90);
+        const punch = Math.min(1, Math.max(0, since) / 140);
+        const easedPunch = 1 - (1 - punch) ** 3;
+        const stampScale = since < 0 ? 1.5 : 1.5 - 0.5 * easedPunch;
+        const holdEnd = 950;
+        const fadeDuration = 540;
+        const fade = since <= holdEnd
+          ? 1
+          : Math.max(0, 1 - (since - holdEnd) / fadeDuration);
+        const stampOpacity = since < 0 ? 0 : appear * fade;
+        const stampRotate = -12 + easedPunch * 8;
+        stampRef.current.style.opacity = String(stampOpacity);
+        stampRef.current.style.transform =
+          `translate3d(${shot.stampPoint.x}px, ${shot.stampPoint.y}px, 0)`
+          + ` translate(-50%, -50%) rotate(${stampRotate}deg) scale(${stampScale})`;
+      }
 
       if (elapsed < shot.duration) frameId = window.requestAnimationFrame(drawFrame);
       else onComplete(shot.id);
@@ -256,27 +276,36 @@ function AnimatedShot({ shot, onComplete }: { shot: Shot; onComplete: (id: numbe
   }, [onComplete, shot]);
 
   return (
-    <span
-      ref={shotRef}
-      className={`goal-animation ${shot.direction}`}
-      data-direction={shot.direction}
-      data-start-side={shot.startSide}
-      data-target-side={shot.targetSide}
-      data-animation-mode={shot.mode}
-      data-end-area={shot.mode === "argentina-advantage" ? "center" : "opponent-flag"}
-      data-motion-phases={shot.mode === "argentina-advantage"
-        ? "approach impact upward-rebound momentum-decay"
-        : "approach"}
-      data-impact-side={shot.mode === "argentina-advantage" ? shot.targetSide : undefined}
-      data-bounce-count="0"
-    >
-      <span className="goal-trail goal-trail--haze" />
-      <span className="goal-trail goal-trail--core" />
-      <span ref={forceRef} className="goal-force-ripple" />
-      <span ref={wallRef} className="goal-force-wall" />
-      <span className="goal-ball-glow" />
-      <img ref={ballRef} className="goal-ball" src={footballImage} alt="" />
-    </span>
+    <>
+      <span
+        ref={shotRef}
+        className={`goal-animation ${shot.direction}`}
+        data-direction={shot.direction}
+        data-start-side={shot.startSide}
+        data-target-side={shot.targetSide}
+        data-animation-mode={shot.mode}
+        data-end-area={shot.mode === "argentina-advantage" ? "center" : "opponent-flag"}
+        data-motion-phases={shot.mode === "argentina-advantage"
+          ? "approach impact upward-rebound momentum-decay"
+          : "approach"}
+        data-impact-side={shot.mode === "argentina-advantage" ? shot.targetSide : undefined}
+        data-var-stamp={shot.stampPoint ? "true" : undefined}
+        data-bounce-count="0"
+      >
+        <span className="goal-trail goal-trail--haze" />
+        <span className="goal-trail goal-trail--core" />
+        <span ref={forceRef} className="goal-force-ripple" />
+        <span ref={wallRef} className="goal-force-wall" />
+        <span className="goal-ball-glow" />
+        <img ref={ballRef} className="goal-ball" src={footballImage} alt="" />
+      </span>
+      {shot.stampPoint ? (
+        <span ref={stampRef} className="goal-var-stamp" aria-hidden="true">
+          <span className="goal-var-stamp__top">⚠ VAR</span>
+          <span className="goal-var-stamp__main">NO GOAL</span>
+        </span>
+      ) : null}
+    </>
   );
 }
 
@@ -342,6 +371,7 @@ export const GoalBallAnimation = forwardRef<GoalBallAnimationHandle, GoalBallAni
           },
           end,
         };
+        let stampPoint: Point | undefined;
         let phases: MotionPhase[] = [{
           segment: normalSegment,
           duration: DURATION_MS,
@@ -354,6 +384,7 @@ export const GoalBallAnimation = forwardRef<GoalBallAnimationHandle, GoalBallAni
             x: end.x + towardCenter * nearTargetOffset,
             y: end.y + Math.min(8, Math.abs(start.y - end.y) * 0.08),
           };
+          stampPoint = impact;
           const approach: CurveSegment = {
             start,
             control: {
@@ -400,6 +431,7 @@ export const GoalBallAnimation = forwardRef<GoalBallAnimationHandle, GoalBallAni
           ),
           trailLength: Math.min(58, Math.max(38, directDistance * 0.13)),
           spinDirection: side === "left" ? 1 : -1,
+          stampPoint,
         }]);
       },
     }), [

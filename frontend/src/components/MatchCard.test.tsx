@@ -175,6 +175,9 @@ describe("MatchCard", () => {
     const argentinaShot = container.querySelector(".goal-animation");
     expect(argentinaShot).toHaveAttribute("data-animation-mode", "normal");
     expect(argentinaShot).toHaveAttribute("data-end-area", "opponent-flag");
+    // Argentina scoring for itself is a normal shot — no VAR stamp.
+    expect(argentinaShot).not.toHaveAttribute("data-var-stamp");
+    expect(container.querySelectorAll(".goal-var-stamp")).toHaveLength(0);
 
     await user.click(screen.getByRole("button", { name: /increase brazil/i }));
     expect(screen.getByLabelText("Brazil score: 1")).toBeInTheDocument();
@@ -190,6 +193,9 @@ describe("MatchCard", () => {
     );
     expect(shots[1]).toHaveAttribute("data-bounce-count", "0");
     expect(shots[1].querySelector(".goal-force-wall")).toBeInTheDocument();
+    // The opponent's denied shot at Argentina now carries a VAR NO GOAL stamp.
+    expect(shots[1]).toHaveAttribute("data-var-stamp", "true");
+    expect(container.querySelectorAll(".goal-var-stamp")).toHaveLength(1);
 
     await user.click(screen.getByRole("button", { name: /save prediction/i }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
