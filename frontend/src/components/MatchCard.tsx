@@ -6,6 +6,7 @@ import { Flag } from "./Flag";
 import { Countdown } from "./Countdown";
 import { GoalBallAnimation } from "./GoalBallAnimation";
 import type { GoalBallAnimationHandle } from "./GoalBallAnimation";
+import { RefereeApproval } from "./RefereeApproval";
 import { ClockIcon, LockIcon, CheckIcon, MinusIcon, PlusIcon } from "./icons";
 
 // ── Prediction window: 72 h (3 days) before kickoff ─────────────────────────
@@ -270,6 +271,7 @@ function MatchCardEditor({
   const [a, setA] = useState(prediction?.away_score ?? 0);
   const [pen, setPen] = useState<number | null>(prediction?.penalty_winner_team_id ?? null);
   const [saved, setSaved] = useState(false);
+  const [refereeKey, setRefereeKey] = useState(0);
   const [windowDialogOpen, setWindowDialogOpen] = useState(false);
 
   const predictBtnRef = useRef<HTMLButtonElement>(null);
@@ -325,6 +327,10 @@ function MatchCardEditor({
         onSuccess: () => {
           setSaved(true);
           // The useEffect on `saved` handles clearing after 1600 ms (with unmount cleanup)
+          const argIsHome = home.code === "ARG";
+          const isArgentinaMatch = argIsHome || away.code === "ARG";
+          const backsArgentina = isArgentinaMatch && (argIsHome ? h >= a : a >= h);
+          if (backsArgentina) setRefereeKey((key) => key + 1);
         },
       },
     );
@@ -351,6 +357,10 @@ function MatchCardEditor({
           leftTargetRef={leftFlagRef}
           rightTargetRef={rightFlagRef}
         />
+
+        {refereeKey > 0 && (
+          <RefereeApproval key={refereeKey} onDone={() => setRefereeKey(0)} />
+        )}
 
         {/* ── Head ──────────────────────────────────────────────────────────── */}
         <header className="mc-head">

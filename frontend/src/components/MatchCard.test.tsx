@@ -244,6 +244,73 @@ describe("MatchCard", () => {
     expect(shots[1]).toHaveAttribute("data-animation-mode", "normal");
   });
 
+  // ── Referee approval (backing Argentina) ─────────────────────────────────
+  it("shows the referee approval after saving a pick that backs Argentina", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ home_score: 1, away_score: 0, penalty_winner_team_id: null, points: null, penalty_bonus: null }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const argMatch: MatchDTO = {
+      ...baseMatch,
+      id: 7,
+      home: { id: 7, name: "Argentina", code: "ARG" },
+      away: { id: 8, name: "Brazil", code: "BRA" },
+    };
+    const user = userEvent.setup();
+    const { container } = wrap(<MatchCard match={argMatch} />);
+
+    // h=1, a=0 → Argentina wins → backs Argentina
+    await user.click(screen.getByRole("button", { name: /increase argentina/i }));
+    await user.click(screen.getByRole("button", { name: /save prediction/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    await waitFor(() =>
+      expect(container.querySelector(".referee-approval")).toBeInTheDocument(),
+    );
+  });
+
+  it("does not show the referee when Argentina loses on the scoreline", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ home_score: 0, away_score: 1, penalty_winner_team_id: null, points: null, penalty_bonus: null }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const argMatch: MatchDTO = {
+      ...baseMatch,
+      id: 9,
+      home: { id: 9, name: "Argentina", code: "ARG" },
+      away: { id: 10, name: "Brazil", code: "BRA" },
+    };
+    const user = userEvent.setup();
+    const { container } = wrap(<MatchCard match={argMatch} />);
+
+    // h=0, a=1 → Argentina (home) loses → no referee
+    await user.click(screen.getByRole("button", { name: /increase brazil/i }));
+    await user.click(screen.getByRole("button", { name: /save prediction/i }));
+
+    await screen.findByText("Saved"); // onSuccess has run
+    expect(container.querySelector(".referee-approval")).toBeNull();
+  });
+
+  it("does not show the referee for a non-Argentina match", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ home_score: 0, away_score: 0, penalty_winner_team_id: null, points: null, penalty_bonus: null }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    const { container } = wrap(<MatchCard match={baseMatch} />); // Mexico vs South Africa
+
+    await user.click(screen.getByRole("button", { name: /save prediction/i }));
+
+    await screen.findByText("Saved");
+    expect(container.querySelector(".referee-approval")).toBeNull();
+  });
+
   // ── Locked state ─────────────────────────────────────────────────────────
   it("renders locked state read-only when match.locked=true", () => {
     wrap(<MatchCard match={{ ...baseMatch, locked: true }} />);
