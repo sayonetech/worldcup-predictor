@@ -1,17 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const APPROVAL_MS = 1900;
+
+// Prefer a user-supplied cut-out; fall back to the committed cartoon placeholder.
+const PRIMARY_SRC = "/referee.png";
+const FALLBACK_SRC = "/referee.svg";
 
 /**
  * Visual-only Easter egg: a referee slides in and gives a thumbs-up.
  * Self-timing — calls onDone after the animation so the parent can unmount it.
- * Renders nothing under reduced motion; hides itself if /referee.png is missing.
+ * Renders nothing under reduced motion. Uses /referee.png if present, otherwise
+ * the committed /referee.svg; hides only if both are missing.
  */
 export function RefereeApproval({ onDone }: { onDone: () => void }) {
   const onDoneRef = useRef(onDone);
   useEffect(() => {
     onDoneRef.current = onDone;
   });
+
+  const [src, setSrc] = useState(PRIMARY_SRC);
 
   const reduceMotion =
     typeof window !== "undefined" &&
@@ -32,9 +39,11 @@ export function RefereeApproval({ onDone }: { onDone: () => void }) {
     <div className="referee-approval" aria-hidden="true">
       <img
         className="referee-approval__img"
-        src="/referee.png"
+        src={src}
         alt=""
-        onError={() => onDoneRef.current()}
+        onError={() =>
+          src === PRIMARY_SRC ? setSrc(FALLBACK_SRC) : onDoneRef.current()
+        }
       />
     </div>
   );
