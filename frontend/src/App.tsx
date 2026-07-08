@@ -4,7 +4,7 @@ import { Home } from "./routes/Home";
 import { Admin } from "./routes/Admin";
 import { HowToPlayModal } from "./components/HowToPlayModal";
 import { VictoryCelebration } from "./components/VictoryCelebration";
-import { ChatWidget } from "./components/ChatWidget";
+// import { ChatWidget } from "./components/ChatWidget"; // hidden per request; see mount site below
 import { ChevronDownIcon, HelpIcon, LogOutIcon, ShieldTabIcon, SparkIcon, StandingsIcon } from "./components/icons";
 import { Avatar } from "./components/Avatar";
 import { useCelebrations, useMarkCelebrationsSeen, type Celebration } from "./lib/celebrations";
@@ -320,7 +320,9 @@ export default function App() {
       {activeCelebration && (
         <VictoryCelebration celebration={activeCelebration} onDone={handleCelebrationDone} />
       )}
-      <ChatWidget />
+      {/* ChatWidget hidden per request — launcher unmounted so no one can chat.
+          Component and API code are intentionally kept; re-add <ChatWidget /> to restore. */}
+      {/* <ChatWidget /> */}
     </>
   );
 }
