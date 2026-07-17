@@ -36,6 +36,14 @@ export type BonusResponse = {
   picks: BonusPick[];
 };
 
+export type BonusUserPicks = {
+  user_id: number;
+  name: string;
+  avatar_url: string;
+  is_me: boolean;
+  picks: BonusPick[];
+};
+
 export type TeamOption = { id: number; name: string; code: string };
 export type PlayerOption = {
   id: number;
@@ -98,5 +106,21 @@ export function useSaveBonus() {
   return useMutation({
     mutationFn: saveBonus,
     onSuccess: (data) => qc.setQueryData(["bonus"], data),
+  });
+}
+
+export async function getAllBonusPredictions(): Promise<BonusUserPicks[]> {
+  const res = await fetch(`${BASE}/bonus/predictions`, { credentials: "include" });
+  if (!res.ok) throw new Error(`bonus predictions failed: ${res.status}`);
+  return res.json();
+}
+
+// Others' bonus picks are only served once picks lock (403 before). Pass
+// enabled=false before lock to avoid a guaranteed-403 request.
+export function useAllBonusPredictions(enabled: boolean) {
+  return useQuery({
+    queryKey: ["bonus-predictions"],
+    queryFn: getAllBonusPredictions,
+    enabled,
   });
 }

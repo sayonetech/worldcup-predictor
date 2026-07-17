@@ -5,11 +5,13 @@ import {
   useBonus,
   useTeams,
   useSaveBonus,
+  useAllBonusPredictions,
   type TeamOption,
   type BonusPick,
   type PlayerOption,
 } from "../lib/bonus";
 import { PlayerCombobox } from "./PlayerCombobox";
+import { BonusUserSelect } from "./BonusUserSelect";
 import { useDropdownPortalPosition } from "./DropdownPortal";
 import { Flag } from "./Flag";
 import {
@@ -196,6 +198,10 @@ export function BonusPanel() {
   // Optimistic label state for player picks (mirrors Bonus.tsx)
   const [optimisticLabels, setOptimisticLabels] = useState<Record<string, string>>({});
 
+  const [viewUserId, setViewUserId] = useState<number | null>(null);
+  // Only fetch once locked+open: the server 403s before the lock boundary.
+  const { data: allPicks = [] } = useAllBonusPredictions(locked && open);
+
   if (isLoading || teamsLoading) return <BonusPanelSkeleton />;
 
   if (isError) {
@@ -214,8 +220,12 @@ export function BonusPanel() {
     );
   }
 
+  const viewingOther = viewUserId !== null;
+  const viewedPicks = viewingOther
+    ? (allPicks.find((u) => u.user_id === viewUserId)?.picks ?? [])
+    : (bonus?.picks ?? []);
   const pickMap = new Map<string, BonusPick>(
-    (bonus?.picks ?? []).map((p) => [p.category, p]),
+    viewedPicks.map((p) => [p.category, p]),
   );
 
   const setPicked = bonus?.picks.filter((p) => p.ref_id).length ?? 0;
@@ -301,6 +311,13 @@ export function BonusPanel() {
       {/* ── Body (collapsible) ──────────────────────────────────────────── */}
       {open && (
         <div className="bonus-body" id="bonus-body">
+          {locked && (
+            <BonusUserSelect
+              users={allPicks}
+              selectedUserId={viewUserId}
+              onSelect={setViewUserId}
+            />
+          )}
           <div className="bonus-grid" role="list" aria-label="Tournament Bonus categories">
             {CATEGORIES.map((cat) => {
               const pick = pickMap.get(cat.key);
@@ -324,7 +341,7 @@ export function BonusPanel() {
                     <TeamSelect
                       teams={teams}
                       selectedId={pick?.ref_id}
-                      disabled={isDisabled}
+                      disabled={isDisabled || viewingOther}
                       ariaLabel={`Select team for ${cat.label}`}
                       onSelect={(id) => handleTeamChange(cat.key, id)}
                     />
@@ -333,9 +350,9 @@ export function BonusPanel() {
                       <PlayerCombobox
                         comboboxKey={cat.key}
                         ariaLabel={`Search players for ${cat.label}`}
-                        disabled={isDisabled}
+                        disabled={isDisabled || viewingOther}
                         currentRefId={pick?.ref_id}
-                        currentLabel={optimisticLabels[cat.key] ?? pick?.label}
+                        currentLabel={viewingOther ? pick?.label : (optimisticLabels[cat.key] ?? pick?.label)}
                         onSelect={(opt: PlayerOption) =>
                           handlePlayerSelect(cat.key, opt.id, `${opt.name} · ${opt.team_code}`)
                         }

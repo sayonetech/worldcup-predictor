@@ -14,10 +14,11 @@ vi.mock("../lib/bonus", async (importOriginal) => {
     useTeams: vi.fn(),
     usePlayerSearch: vi.fn(),
     useSaveBonus: vi.fn(),
+    useAllBonusPredictions: vi.fn(),
   };
 });
 
-import { useBonus, useTeams, usePlayerSearch, useSaveBonus } from "../lib/bonus";
+import { useBonus, useTeams, usePlayerSearch, useSaveBonus, useAllBonusPredictions } from "../lib/bonus";
 
 const mutate = vi.fn();
 const defaultSave = { mutate, isPending: false, isError: false, error: null };
@@ -41,6 +42,17 @@ const lockedBonus: import("../lib/bonus").BonusResponse = {
   ],
 };
 
+const allBonusPicks: import("../lib/bonus").BonusUserPicks[] = [
+  {
+    user_id: 1, name: "You", avatar_url: "", is_me: true,
+    picks: [{ category: "winner", ref_type: "team", ref_id: 1, label: "Brazil (BRA)" }],
+  },
+  {
+    user_id: 2, name: "Kiran", avatar_url: "", is_me: false,
+    picks: [{ category: "winner", ref_type: "team", ref_id: 2, label: "Argentina (ARG)" }],
+  },
+];
+
 function wrap(ui: React.ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>);
@@ -52,6 +64,7 @@ describe("BonusPanel", () => {
     (useSaveBonus as ReturnType<typeof vi.fn>).mockReturnValue(defaultSave);
     (useTeams as ReturnType<typeof vi.fn>).mockReturnValue({ data: teams, isLoading: false });
     (usePlayerSearch as ReturnType<typeof vi.fn>).mockReturnValue({ data: [], isFetching: false });
+    (useAllBonusPredictions as ReturnType<typeof vi.fn>).mockReturnValue({ data: [], isLoading: false });
   });
 
   // ── Collapsed state ───────────────────────────────────────────────────────
@@ -307,5 +320,40 @@ describe("BonusPanel", () => {
 
     // onError was called, so optimistic label should have been cleaned up
     expect(onErrorMutate).toHaveBeenCalled();
+  });
+
+  // ── View others' picks (locked only) ──────────────────────────────────────
+  it("does not show the user selector before lock", async () => {
+    (useBonus as ReturnType<typeof vi.fn>).mockReturnValue({ data: unlocked, isLoading: false, isError: false });
+    const user = userEvent.setup();
+    wrap(<BonusPanel />);
+    await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
+    expect(screen.queryByRole("button", { name: /view bonus picks by user/i })).toBeNull();
+  });
+
+  it("shows the user selector once picks are locked", async () => {
+    (useBonus as ReturnType<typeof vi.fn>).mockReturnValue({ data: lockedBonus, isLoading: false, isError: false });
+    (useAllBonusPredictions as ReturnType<typeof vi.fn>).mockReturnValue({ data: allBonusPicks, isLoading: false });
+    const user = userEvent.setup();
+    wrap(<BonusPanel />);
+    await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
+    expect(screen.getByRole("button", { name: /view bonus picks by user/i })).toBeInTheDocument();
+  });
+
+  it("swaps the category rows to the selected user's picks", async () => {
+    (useBonus as ReturnType<typeof vi.fn>).mockReturnValue({ data: lockedBonus, isLoading: false, isError: false });
+    (useAllBonusPredictions as ReturnType<typeof vi.fn>).mockReturnValue({ data: allBonusPicks, isLoading: false });
+    const user = userEvent.setup();
+    wrap(<BonusPanel />);
+    await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
+
+    // Default view is "You" → your own winner pick (Brazil).
+    expect(screen.getByRole("button", { name: /select team for world cup winner/i })).toHaveTextContent("Brazil");
+
+    await user.click(screen.getByRole("button", { name: /view bonus picks by user/i }));
+    await user.click(screen.getByRole("menuitem", { name: /kiran/i }));
+
+    // Now showing Kiran's winner pick (Argentina).
+    expect(screen.getByRole("button", { name: /select team for world cup winner/i })).toHaveTextContent("Argentina");
   });
 });
