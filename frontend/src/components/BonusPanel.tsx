@@ -5,11 +5,13 @@ import {
   useBonus,
   useTeams,
   useSaveBonus,
+  useAllBonusPredictions,
   type TeamOption,
   type BonusPick,
   type PlayerOption,
 } from "../lib/bonus";
 import { PlayerCombobox } from "./PlayerCombobox";
+import { BonusUserSelect } from "./BonusUserSelect";
 import { useDropdownPortalPosition } from "./DropdownPortal";
 import { Flag } from "./Flag";
 import {
@@ -196,6 +198,28 @@ export function BonusPanel() {
   // Optimistic label state for player picks (mirrors Bonus.tsx)
   const [optimisticLabels, setOptimisticLabels] = useState<Record<string, string>>({});
 
+  const [viewUserId, setViewUserId] = useState<number | null>(null);
+  // Only fetch once locked+open: the server 403s before the lock boundary.
+  const {
+    data: allPicks = [],
+    isLoading: allPicksLoading,
+    isError: allPicksError,
+  } = useAllBonusPredictions(locked && open);
+
+  // If the selected user's picks failed to load or the user vanished from a
+  // refetch, fall back to "You" rather than silently rendering their rows as
+  // unset — a stale/failed allPicks must never be misread as "no picks".
+  // Adjusted during render (React's documented pattern for syncing state to
+  // props/query results) rather than in an effect, to avoid the extra
+  // cascading-render pass; the guard (viewUserId == null short-circuits)
+  // keeps this from looping.
+  if (
+    locked && open && !allPicksLoading && viewUserId != null &&
+    (allPicksError || !allPicks.some((u) => u.user_id === viewUserId))
+  ) {
+    setViewUserId(null);
+  }
+
   if (isLoading || teamsLoading) return <BonusPanelSkeleton />;
 
   if (isError) {
@@ -214,8 +238,12 @@ export function BonusPanel() {
     );
   }
 
+  const viewingOther = viewUserId !== null;
+  const viewedPicks = viewingOther
+    ? (allPicks.find((u) => u.user_id === viewUserId)?.picks ?? [])
+    : (bonus?.picks ?? []);
   const pickMap = new Map<string, BonusPick>(
-    (bonus?.picks ?? []).map((p) => [p.category, p]),
+    viewedPicks.map((p) => [p.category, p]),
   );
 
   const setPicked = bonus?.picks.filter((p) => p.ref_id).length ?? 0;
@@ -251,42 +279,64 @@ export function BonusPanel() {
 
   return (
     <div className={`bonus-panel${open ? " open" : ""}`}>
-      {/* ── Header / toggle ─────────────────────────────────────────────── */}
-      <button
-        type="button"
-        className="bonus-head"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls="bonus-body"
-        aria-label={open ? "Hide Tournament Bonus picks" : "Set Tournament Bonus picks"}
-      >
-        <span className="bonus-head-icon"><TrophyIcon /></span>
+      {/* ── Header / toggle ─────────────────────────────────────────────────
+           The row is a plain div, not one big button: the "Viewing" picker is
+           interactive and cannot legally nest inside a <button>. The heading
+           button carries the accessible name + aria-expanded; the chevron is a
+           redundant visual affordance for the same action, so it is hidden from
+           the a11y tree to keep exactly one exposed toggle. ── */}
+      <div className="bonus-head">
+        <button
+          type="button"
+          className="bonus-head-btn"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-controls="bonus-body"
+          aria-label={open ? "Hide Tournament Bonus picks" : "Set Tournament Bonus picks"}
+        >
+          <span className="bonus-head-icon"><TrophyIcon /></span>
 
-        <div className="bonus-head-txt">
-          <div className="bonus-head-title">
-            Tournament Bonus
-            <span className="bonus-head-tag">
-              <span className="mono">{earnedPts}</span>
-              <span>/{maxPts} pts</span>
-            </span>
-          </div>
-          <div className="bonus-head-sub">
-            <span>{setPicked}/{totalCats} picks set · predict the big honours once</span>
-            {locked ? (
-              <span className="bonus-lock-pill"><LockIcon /> Locked</span>
-            ) : bonus?.lock_at ? (
-              <span className="bonus-lock-pill">
-                <LockIcon />
-                <span>Locks in <span className="mono">{countdown}</span></span>
+          <div className="bonus-head-txt">
+            <div className="bonus-head-title">
+              Tournament Bonus
+              <span className="bonus-head-tag">
+                <span className="mono">{earnedPts}</span>
+                <span>/{maxPts} pts</span>
               </span>
-            ) : null}
+            </div>
+            <div className="bonus-head-sub">
+              <span>{setPicked}/{totalCats} picks set · predict the big honours once</span>
+              {locked ? (
+                <span className="bonus-lock-pill"><LockIcon /> Locked</span>
+              ) : bonus?.lock_at ? (
+                <span className="bonus-lock-pill">
+                  <LockIcon />
+                  <span>Locks in <span className="mono">{countdown}</span></span>
+                </span>
+              ) : null}
+            </div>
           </div>
-        </div>
+        </button>
 
-        <span className={`bonus-toggle${open ? " open" : ""}`} aria-hidden="true">
+        {open && locked && (
+          <BonusUserSelect
+            users={allPicks}
+            selectedUserId={viewUserId}
+            onSelect={setViewUserId}
+            isLoading={allPicksLoading}
+          />
+        )}
+
+        <button
+          type="button"
+          className={`bonus-toggle${open ? " open" : ""}`}
+          onClick={() => setOpen((o) => !o)}
+          tabIndex={-1}
+          aria-hidden="true"
+        >
           {open ? "Hide" : "Set picks"} <ChevronIcon />
-        </span>
-      </button>
+        </button>
+      </div>
 
       {/* ── Save error ───────────────────────────────────────────────────── */}
       {saveMutation.isError && (
@@ -324,7 +374,7 @@ export function BonusPanel() {
                     <TeamSelect
                       teams={teams}
                       selectedId={pick?.ref_id}
-                      disabled={isDisabled}
+                      disabled={isDisabled || viewingOther}
                       ariaLabel={`Select team for ${cat.label}`}
                       onSelect={(id) => handleTeamChange(cat.key, id)}
                     />
@@ -333,9 +383,9 @@ export function BonusPanel() {
                       <PlayerCombobox
                         comboboxKey={cat.key}
                         ariaLabel={`Search players for ${cat.label}`}
-                        disabled={isDisabled}
+                        disabled={isDisabled || viewingOther}
                         currentRefId={pick?.ref_id}
-                        currentLabel={optimisticLabels[cat.key] ?? pick?.label}
+                        currentLabel={viewingOther ? pick?.label : (optimisticLabels[cat.key] ?? pick?.label)}
                         onSelect={(opt: PlayerOption) =>
                           handlePlayerSelect(cat.key, opt.id, `${opt.name} · ${opt.team_code}`)
                         }

@@ -36,6 +36,83 @@ type bonusResponse struct {
 	Picks  []bonusPickDTO `json:"picks"`
 }
 
+type bonusUserPicksDTO struct {
+	UserID    int64          `json:"user_id"`
+	Name      string         `json:"name"`
+	AvatarURL string         `json:"avatar_url"`
+	IsMe      bool           `json:"is_me"`
+	Picks     []bonusPickDTO `json:"picks"`
+}
+
+// GetAllBonusPredictions reveals every player's tournament-bonus picks — but only
+// once picks lock at BONUS_LOCK_AT. Before that boundary it returns 403, mirroring
+// the kickoff gate on match predictions (privacy, spec §4). Read-only.
+func (d *Deps) GetAllBonusPredictions(w http.ResponseWriter, r *http.Request) {
+	u, ok := userFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "not authenticated")
+		return
+	}
+	lock, ok := d.bonusLockAt(r)
+	if !ok {
+		writeError(w, http.StatusInternalServerError, "settings unavailable")
+		return
+	}
+	// Privacy gate: hidden until picks lock — same boundary as the write lock.
+	if now().Before(lock) {
+		writeError(w, http.StatusForbidden, "bonus picks are hidden until lock")
+		return
+	}
+
+	rows, err := d.Bonus.ListBonusPredictionsWithUsers(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not load bonus picks")
+		return
+	}
+
+	out := make([]bonusUserPicksDTO, 0)
+	index := make(map[int64]int, len(rows))
+	// Memoize label lookups within the request: picks are heavily duplicated
+	// across users (many pick the same team/player), so this avoids re-querying
+	// the same ref repeatedly — without it this endpoint costs 1 + (users × 7)
+	// sequential DB round-trips.
+	type refKey struct {
+		refType bonus.RefType
+		id      int64
+	}
+	labels := make(map[refKey]string)
+	for _, row := range rows {
+		i, seen := index[row.UserID]
+		if !seen {
+			out = append(out, bonusUserPicksDTO{
+				UserID:    row.UserID,
+				Name:      row.Name,
+				AvatarURL: row.AvatarURL,
+				IsMe:      row.UserID == u.ID,
+				Picks:     []bonusPickDTO{},
+			})
+			i = len(out) - 1
+			index[row.UserID] = i
+		}
+		cat := bonus.Category(row.Category)
+		refType := bonus.RefTypeOf(cat)
+		key := refKey{refType: refType, id: row.RefID}
+		label, seen := labels[key]
+		if !seen {
+			label = d.resolveRefLabel(r, cat, row.RefID)
+			labels[key] = label
+		}
+		out[i].Picks = append(out[i].Picks, bonusPickDTO{
+			Category: row.Category,
+			RefType:  string(refType),
+			RefID:    row.RefID,
+			Label:    label,
+			Points:   row.Points,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // GetBonus returns the caller's bonus picks and the current lock state.
 func (d *Deps) GetBonus(w http.ResponseWriter, r *http.Request) {
 	lock, ok := d.bonusLockAt(r)

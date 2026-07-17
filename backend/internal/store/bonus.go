@@ -34,11 +34,23 @@ type BonusPickWrite struct {
 	RefID    int64
 }
 
+// BonusUserPickRow is one user's single bonus pick alongside that player's
+// identity. Used to reveal all users' bonus picks after BONUS_LOCK_AT (spec §4).
+type BonusUserPickRow struct {
+	UserID    int64
+	Name      string
+	AvatarURL string
+	Category  string
+	RefID     int64
+	Points    *int64
+}
+
 // BonusStore is the read/write surface for tournament-bonus picks + outcomes.
 type BonusStore interface {
 	UpsertBonusPrediction(ctx context.Context, userID int64, category string, refID int64) error
 	UpsertBonusPredictions(ctx context.Context, userID int64, picks []BonusPickWrite) error
 	ListBonusPredictionsForUser(ctx context.Context, userID int64) ([]BonusPick, error)
+	ListBonusPredictionsWithUsers(ctx context.Context) ([]BonusUserPickRow, error)
 	UpsertBonusResult(ctx context.Context, category string, refID int64) error
 	ListBonusResults(ctx context.Context) ([]BonusResult, error)
 	ListAllBonusPredictions(ctx context.Context) ([]BonusPredictionRow, error)
@@ -91,6 +103,29 @@ func (s *SQLStore) ListBonusPredictionsForUser(ctx context.Context, userID int64
 			bp.Points = &v
 		}
 		out = append(out, bp)
+	}
+	return out, nil
+}
+
+func (s *SQLStore) ListBonusPredictionsWithUsers(ctx context.Context) ([]BonusUserPickRow, error) {
+	rows, err := s.q.ListBonusPredictionsWithUsers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("store: list bonus predictions with users: %w", err)
+	}
+	out := make([]BonusUserPickRow, 0, len(rows))
+	for _, r := range rows {
+		row := BonusUserPickRow{
+			UserID:    r.UserID,
+			Name:      r.Name,
+			AvatarURL: r.AvatarUrl,
+			Category:  string(r.Category),
+			RefID:     r.RefID,
+		}
+		if r.Points.Valid {
+			v := int64(r.Points.Int32)
+			row.Points = &v
+		}
+		out = append(out, row)
 	}
 	return out, nil
 }

@@ -52,6 +52,7 @@ type fakeBonusStore struct {
 	playerOK     bool
 	resultsSaved int
 	results      []store.BonusResult
+	allPicks     []store.BonusUserPickRow
 }
 
 func (f *fakeBonusStore) UpsertBonusPrediction(_ context.Context, _ int64, cat string, ref int64) error {
@@ -72,6 +73,9 @@ func (f *fakeBonusStore) UpsertBonusPredictions(_ context.Context, _ int64, pick
 }
 func (f *fakeBonusStore) ListBonusPredictionsForUser(context.Context, int64) ([]store.BonusPick, error) {
 	return f.picks, nil
+}
+func (f *fakeBonusStore) ListBonusPredictionsWithUsers(context.Context) ([]store.BonusUserPickRow, error) {
+	return f.allPicks, nil
 }
 func (f *fakeBonusStore) UpsertBonusResult(context.Context, string, int64) error {
 	f.resultsSaved++
@@ -389,6 +393,104 @@ func TestGetTeams_Returns200(t *testing.T) {
 	_ = json.NewDecoder(rec.Body).Decode(&got)
 	if len(got) != 2 {
 		t.Fatalf("teams count = %d, want 2", len(got))
+	}
+}
+
+func TestGetAllBonusPredictions_BeforeLockForbidden(t *testing.T) {
+	old := now
+	now = func() time.Time { return time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { now = old })
+
+	st := &fakeBonusStore{allPicks: []store.BonusUserPickRow{
+		{UserID: 1, Name: "Ana", Category: "winner", RefID: 9},
+	}}
+	d := &Deps{Bonus: st, Players: &fakePlayerStore{}, Settings: &fakeSettings{lockAt: time.Date(2026, 6, 28, 18, 29, 0, 0, time.UTC)}}
+	req := ctxUser(httptest.NewRequest(http.MethodGet, "/api/bonus/predictions", nil), 1)
+	rec := httptest.NewRecorder()
+	d.GetAllBonusPredictions(rec, req)
+	if rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403 before lock", rec.Code)
+	}
+}
+
+func TestGetAllBonusPredictions_AtExactLockBoundaryRevealed(t *testing.T) {
+	old := now
+	lockAt := time.Date(2026, 6, 28, 18, 29, 0, 0, time.UTC)
+	now = func() time.Time { return lockAt } // now == lock → revealed (same boundary as the write lock)
+	t.Cleanup(func() { now = old })
+
+	st := &fakeBonusStore{allPicks: []store.BonusUserPickRow{
+		{UserID: 1, Name: "Ana", Category: "winner", RefID: 9},
+	}}
+	d := &Deps{
+		Bonus:    st,
+		Players:  &fakePlayerStore{teamNames: map[int64]string{9: "Brazil"}},
+		Settings: &fakeSettings{lockAt: lockAt},
+	}
+	req := ctxUser(httptest.NewRequest(http.MethodGet, "/api/bonus/predictions", nil), 1)
+	rec := httptest.NewRecorder()
+	d.GetAllBonusPredictions(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 at exact lock boundary", rec.Code)
+	}
+}
+
+func TestGetAllBonusPredictions_SettingsErrorFailsSafe(t *testing.T) {
+	d := &Deps{Bonus: &fakeBonusStore{}, Players: &fakePlayerStore{}, Settings: &fakeSettings{lockErr: errors.New("settings down")}}
+	req := ctxUser(httptest.NewRequest(http.MethodGet, "/api/bonus/predictions", nil), 1)
+	rec := httptest.NewRecorder()
+	d.GetAllBonusPredictions(rec, req)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (must not fall open on a settings error)", rec.Code)
+	}
+}
+
+func TestGetAllBonusPredictions_AfterLockGroupsByUser(t *testing.T) {
+	old := now
+	now = func() time.Time { return time.Date(2026, 6, 29, 0, 0, 0, 0, time.UTC) }
+	t.Cleanup(func() { now = old })
+
+	st := &fakeBonusStore{allPicks: []store.BonusUserPickRow{
+		{UserID: 1, Name: "Ana", Category: "winner", RefID: 9},
+		{UserID: 1, Name: "Ana", Category: "golden_boot", RefID: 42},
+		{UserID: 2, Name: "Bob", Category: "winner", RefID: 7},
+	}}
+	d := &Deps{
+		Bonus: st,
+		Players: &fakePlayerStore{
+			teamNames:   map[int64]string{9: "Brazil", 7: "France"},
+			playerNames: map[int64]string{42: "Mbappe"},
+		},
+		Settings: &fakeSettings{lockAt: time.Date(2026, 6, 28, 18, 29, 0, 0, time.UTC)},
+	}
+	req := ctxUser(httptest.NewRequest(http.MethodGet, "/api/bonus/predictions", nil), 2)
+	rec := httptest.NewRecorder()
+	d.GetAllBonusPredictions(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+
+	var got []bonusUserPicksDTO
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("users = %d, want 2 grouped users", len(got))
+	}
+	if got[0].UserID != 1 || len(got[0].Picks) != 2 {
+		t.Fatalf("first user = %+v, want user 1 with 2 picks", got[0])
+	}
+	if got[0].IsMe {
+		t.Error("user 1 must not be is_me when the caller is user 2")
+	}
+	if !got[1].IsMe {
+		t.Error("user 2 must be is_me when the caller is user 2")
+	}
+	if got[0].Picks[0].Label != "Brazil" {
+		t.Errorf("label = %q, want %q", got[0].Picks[0].Label, "Brazil")
+	}
+	if got[0].Picks[0].RefType != "team" || got[0].Picks[1].RefType != "player" {
+		t.Errorf("ref types = %q/%q, want team/player", got[0].Picks[0].RefType, got[0].Picks[1].RefType)
 	}
 }
 

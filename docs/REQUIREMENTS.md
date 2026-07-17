@@ -175,6 +175,8 @@ Other participants' predictions for a match are **hidden until that match locks*
 
 **Implemented:** `GET /api/matches/{id}/predictions` returns every player's pick for a match — name, scoreline, shootout winner, and earned points once FINAL — but **only once the match has locked** (`403` before kickoff, server-authoritative). The UI reveals them in a scrollable modal on locked/past matches ("Others' picks").
 
+- Tournament Bonus picks follow the same rule at their own boundary: every user's bonus picks stay private until picks lock at `BONUS_LOCK_AT`, and are revealed to all users afterwards. Once locked, the Bonus panel shows a read-only "Viewing" selector listing you plus every other user who set picks; choosing a user shows their picks in the category rows. The server is authoritative — `GET /api/bonus/predictions` returns 403 before the lock boundary — and the reveal is read-only (no one can edit another user's picks).
+
 ---
 
 ## 5. Scoring engine specification

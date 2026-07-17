@@ -241,7 +241,10 @@
 /* ---------- Bonus panel ---------- */
 .bonus-panel { border: 1px solid var(--border); border-radius: var(--r-lg); background: var(--surface); overflow: hidden; transition: box-shadow 0.2s, border-color 0.2s; box-shadow: var(--shadow-card); }
 .bonus-panel.open { box-shadow: var(--shadow-md); }
-.bonus-head { display: flex; align-items: center; gap: 16px; width: 100%; padding: 18px 22px; text-align: left; }
+.bonus-head { display: flex; align-items: center; gap: 12px; width: 100%; padding: 18px 22px; text-align: left; }
+/* The clickable heading area. The row itself is a div so the "Viewing" picker can
+   sit beside it without nesting interactive elements. */
+.bonus-head-btn { display: flex; align-items: center; gap: 16px; flex: 1; min-width: 0; text-align: left; }
 .bonus-head-icon { width: 44px; height: 44px; flex: none; border-radius: 13px; display: grid; place-items: center; font-size: 22px; color: var(--gold); background: var(--gold-soft); }
 .bonus-head-txt { flex: 1; min-width: 0; }
 .bonus-head-title { font-family: var(--font-display); font-weight: 700; font-size: 17px; letter-spacing: -0.02em; display: flex; align-items: center; gap: 10px; white-space: nowrap; }
@@ -269,6 +272,8 @@
 .bonus-select-wrap, .bonus-input-wrap, .bonus-combobox { position: relative; width: 172px; flex: none; }
 .bonus-select, .bonus-sel-btn { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 9px 11px; background: var(--surface); border: 1px solid var(--border-2); border-radius: var(--r-sm); font-size: 13px; color: var(--text); transition: 0.15s; }
 .bonus-select:hover, .bonus-select.open, .bonus-sel-btn:hover, .bonus-sel-btn.open { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+/* The "Viewing" picker sits in the header row; keep it compact so the title keeps room. */
+.bonus-head .bonus-select-wrap { width: 148px; }
 .bs-val { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
 .bs-code { font-size: 10px; color: var(--text-3); }
 .bs-placeholder { color: var(--text-3); }
@@ -791,7 +796,10 @@
     color: var(--text-faint);
   }
 
-  .bonus-head { padding: 16px; gap: 12px; }
+  .bonus-head { padding: 16px; gap: 8px; }
+  .bonus-head-btn { gap: 12px; }
+  .bonus-head .bonus-select-wrap { width: 116px; }
+  .bonus-toggle { padding: 8px 12px; }
   .bonus-head-icon { width: 38px; height: 38px; font-size: 19px; }
   .bonus-head-title { font-size: 15.5px; flex-wrap: wrap; gap: 6px; white-space: normal; }
   .bonus-body { padding: 2px 16px 18px; }
