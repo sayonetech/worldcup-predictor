@@ -29,9 +29,9 @@ func NewRouter(d *Deps, _ bool) chi.Router {
 	r.Get("/docs", GetDocs)
 	r.Get("/openapi.yaml", GetOpenAPISpec)
 
-	authLimiter     := newKeyedLimiter(authRate, authBurst)
-	writeLimiter    := newKeyedLimiter(writeRate, writeBurst)
-	chatLimiter     := newKeyedLimiter(chatRate, chatBurst)
+	authLimiter := newKeyedLimiter(authRate, authBurst)
+	writeLimiter := newKeyedLimiter(writeRate, writeBurst)
+	chatLimiter := newKeyedLimiter(chatRate, chatBurst)
 	gameReadLimiter := newKeyedLimiter(gameReadRate, gameReadBurst)
 
 	r.Route("/api", func(api chi.Router) {
@@ -53,6 +53,7 @@ func NewRouter(d *Deps, _ bool) chi.Router {
 			priv.With(d.RequireAdmin).Put("/admin/winners/paid", d.PutWinnerPaid)
 
 			priv.Get("/bonus", d.GetBonus)
+			priv.Get("/bonus/predictions", d.GetAllBonusPredictions)
 			priv.Put("/bonus", d.PutBonus)
 			priv.Get("/teams", d.GetTeams)
 			priv.Get("/players", d.GetPlayers)
