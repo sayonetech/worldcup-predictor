@@ -9,6 +9,8 @@ type Props = {
   /** null = view your own picks */
   selectedUserId: number | null;
   onSelect: (userId: number | null) => void;
+  /** true while the other users' picks are still in flight */
+  isLoading?: boolean;
 };
 
 const ARIA_LABEL = "View bonus picks by user";
@@ -17,7 +19,7 @@ const ARIA_LABEL = "View bonus picks by user";
  * Read-only "Viewing" dropdown shown in the Bonus panel once picks lock.
  * Lists "You" plus every other user who set picks.
  */
-export function BonusUserSelect({ users, selectedUserId, onSelect }: Props) {
+export function BonusUserSelect({ users, selectedUserId, onSelect, isLoading }: Props) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -41,56 +43,62 @@ export function BonusUserSelect({ users, selectedUserId, onSelect }: Props) {
     : others.find((u) => u.user_id === selectedUserId);
 
   return (
-    <div className="bonus-viewas" ref={wrapRef}>
+    <div className="bonus-viewas">
       <span className="bonus-viewas-label">Viewing</span>
-      <button
-        type="button"
-        className={`bonus-sel-btn${open ? " open" : ""}`}
-        onClick={() => setOpen((o) => !o)}
-        aria-label={ARIA_LABEL}
-        aria-haspopup="menu"
-        aria-expanded={open}
-      >
-        <span className="bs-val">{selected ? selected.name : "You"}</span>
-        <span className="bs-chev"><ChevronIcon /></span>
-      </button>
-
-      {open && menuStyle && createPortal(
-        <div
-          ref={menuRef}
-          className="bonus-menu-wrap bonus-menu-wrap--portal"
-          role="menu"
+      <div className="bonus-select-wrap" ref={wrapRef}>
+        <button
+          type="button"
+          className={`bonus-sel-btn${open ? " open" : ""}`}
+          onClick={() => setOpen((o) => !o)}
           aria-label={ARIA_LABEL}
-          style={menuStyle}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-busy={isLoading || undefined}
+          disabled={isLoading}
         >
-          <div className="bonus-menu-list">
-            <button
-              type="button"
-              className={`bonus-opt-btn${selectedUserId == null ? " selected" : ""}`}
-              role="menuitem"
-              onClick={() => { onSelect(null); setOpen(false); }}
-              onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
-            >
-              You
-              {selectedUserId == null && <span className="bonus-opt-tick"><CheckIcon /></span>}
-            </button>
-            {others.map((u) => (
+          <span className="bs-val">
+            {isLoading ? "Loading…" : selected ? selected.name : "You"}
+          </span>
+          <span className="bs-chev"><ChevronIcon /></span>
+        </button>
+
+        {open && menuStyle && createPortal(
+          <div
+            ref={menuRef}
+            className="bonus-menu-wrap bonus-menu-wrap--portal"
+            role="menu"
+            aria-label={ARIA_LABEL}
+            style={menuStyle}
+          >
+            <div className="bonus-menu-list">
               <button
-                key={u.user_id}
                 type="button"
-                className={`bonus-opt-btn${selectedUserId === u.user_id ? " selected" : ""}`}
+                className={`bonus-opt-btn${selectedUserId == null ? " selected" : ""}`}
                 role="menuitem"
-                onClick={() => { onSelect(u.user_id); setOpen(false); }}
+                onClick={() => { onSelect(null); setOpen(false); }}
                 onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
               >
-                {u.name}
-                {selectedUserId === u.user_id && <span className="bonus-opt-tick"><CheckIcon /></span>}
+                You
+                {selectedUserId == null && <span className="bonus-opt-tick"><CheckIcon /></span>}
               </button>
-            ))}
-          </div>
-        </div>,
-        document.body,
-      )}
+              {others.map((u) => (
+                <button
+                  key={u.user_id}
+                  type="button"
+                  className={`bonus-opt-btn${selectedUserId === u.user_id ? " selected" : ""}`}
+                  role="menuitem"
+                  onClick={() => { onSelect(u.user_id); setOpen(false); }}
+                  onKeyDown={(e) => { if (e.key === "Escape") setOpen(false); }}
+                >
+                  {u.name}
+                  {selectedUserId === u.user_id && <span className="bonus-opt-tick"><CheckIcon /></span>}
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )}
+      </div>
     </div>
   );
 }

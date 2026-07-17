@@ -271,7 +271,6 @@
 .bonus-select:hover, .bonus-select.open, .bonus-sel-btn:hover, .bonus-sel-btn.open { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 .bonus-viewas { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .bonus-viewas-label { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.04em; }
-.bonus-viewas .bonus-sel-btn { width: 172px; flex: none; }
 .bs-val { display: flex; align-items: center; gap: 8px; min-width: 0; font-weight: 600; }
 .bs-code { font-size: 10px; color: var(--text-3); }
 .bs-placeholder { color: var(--text-3); }

@@ -72,6 +72,15 @@ func (d *Deps) GetAllBonusPredictions(w http.ResponseWriter, r *http.Request) {
 
 	out := make([]bonusUserPicksDTO, 0)
 	index := make(map[int64]int, len(rows))
+	// Memoize label lookups within the request: picks are heavily duplicated
+	// across users (many pick the same team/player), so this avoids re-querying
+	// the same ref repeatedly — without it this endpoint costs 1 + (users × 7)
+	// sequential DB round-trips.
+	type refKey struct {
+		refType bonus.RefType
+		id      int64
+	}
+	labels := make(map[refKey]string)
 	for _, row := range rows {
 		i, seen := index[row.UserID]
 		if !seen {
@@ -86,11 +95,18 @@ func (d *Deps) GetAllBonusPredictions(w http.ResponseWriter, r *http.Request) {
 			index[row.UserID] = i
 		}
 		cat := bonus.Category(row.Category)
+		refType := bonus.RefTypeOf(cat)
+		key := refKey{refType: refType, id: row.RefID}
+		label, seen := labels[key]
+		if !seen {
+			label = d.resolveRefLabel(r, cat, row.RefID)
+			labels[key] = label
+		}
 		out[i].Picks = append(out[i].Picks, bonusPickDTO{
 			Category: row.Category,
-			RefType:  string(bonus.RefTypeOf(cat)),
+			RefType:  string(refType),
 			RefID:    row.RefID,
-			Label:    d.resolveRefLabel(r, cat, row.RefID),
+			Label:    label,
 			Points:   row.Points,
 		})
 	}

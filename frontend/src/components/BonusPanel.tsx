@@ -200,7 +200,25 @@ export function BonusPanel() {
 
   const [viewUserId, setViewUserId] = useState<number | null>(null);
   // Only fetch once locked+open: the server 403s before the lock boundary.
-  const { data: allPicks = [] } = useAllBonusPredictions(locked && open);
+  const {
+    data: allPicks = [],
+    isLoading: allPicksLoading,
+    isError: allPicksError,
+  } = useAllBonusPredictions(locked && open);
+
+  // If the selected user's picks failed to load or the user vanished from a
+  // refetch, fall back to "You" rather than silently rendering their rows as
+  // unset — a stale/failed allPicks must never be misread as "no picks".
+  // Adjusted during render (React's documented pattern for syncing state to
+  // props/query results) rather than in an effect, to avoid the extra
+  // cascading-render pass; the guard (viewUserId == null short-circuits)
+  // keeps this from looping.
+  if (
+    locked && open && !allPicksLoading && viewUserId != null &&
+    (allPicksError || !allPicks.some((u) => u.user_id === viewUserId))
+  ) {
+    setViewUserId(null);
+  }
 
   if (isLoading || teamsLoading) return <BonusPanelSkeleton />;
 
@@ -316,6 +334,7 @@ export function BonusPanel() {
               users={allPicks}
               selectedUserId={viewUserId}
               onSelect={setViewUserId}
+              isLoading={allPicksLoading}
             />
           )}
           <div className="bonus-grid" role="list" aria-label="Tournament Bonus categories">
