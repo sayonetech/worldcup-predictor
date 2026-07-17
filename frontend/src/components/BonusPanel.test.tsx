@@ -51,6 +51,10 @@ const allBonusPicks: import("../lib/bonus").BonusUserPicks[] = [
     user_id: 2, name: "Kiran", avatar_url: "", is_me: false,
     picks: [{ category: "winner", ref_type: "team", ref_id: 2, label: "Argentina (ARG)" }],
   },
+  {
+    user_id: 3, name: "Vaishak", avatar_url: "", is_me: false,
+    picks: [{ category: "winner", ref_type: "team", ref_id: 1, label: "Brazil (BRA)" }],
+  },
 ];
 
 function wrap(ui: React.ReactNode) {
@@ -338,6 +342,53 @@ describe("BonusPanel", () => {
     wrap(<BonusPanel />);
     await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
     expect(screen.getByRole("button", { name: /view bonus picks by user/i })).toBeInTheDocument();
+  });
+
+  it("filters the user list by the search query", async () => {
+    (useBonus as ReturnType<typeof vi.fn>).mockReturnValue({ data: lockedBonus, isLoading: false, isError: false });
+    (useAllBonusPredictions as ReturnType<typeof vi.fn>).mockReturnValue({ data: allBonusPicks, isLoading: false, isError: false });
+    const user = userEvent.setup();
+    wrap(<BonusPanel />);
+    await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
+    await user.click(screen.getByRole("button", { name: /view bonus picks by user/i }));
+
+    // Unfiltered: You + both other players.
+    expect(screen.getByRole("menuitem", { name: /^you$/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /kiran/i })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: /vaishak/i })).toBeInTheDocument();
+
+    await user.type(screen.getByRole("textbox", { name: /search players/i }), "kir");
+
+    // Only Kiran survives — "You" and Vaishak are filtered out too.
+    expect(screen.getByRole("menuitem", { name: /kiran/i })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: /vaishak/i })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: /^you$/i })).toBeNull();
+  });
+
+  it("shows an empty state when no player matches the search", async () => {
+    (useBonus as ReturnType<typeof vi.fn>).mockReturnValue({ data: lockedBonus, isLoading: false, isError: false });
+    (useAllBonusPredictions as ReturnType<typeof vi.fn>).mockReturnValue({ data: allBonusPicks, isLoading: false, isError: false });
+    const user = userEvent.setup();
+    wrap(<BonusPanel />);
+    await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
+    await user.click(screen.getByRole("button", { name: /view bonus picks by user/i }));
+    await user.type(screen.getByRole("textbox", { name: /search players/i }), "zzz");
+
+    expect(screen.getByText(/no players match/i)).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem")).toBeNull();
+  });
+
+  it("can select a user found via search", async () => {
+    (useBonus as ReturnType<typeof vi.fn>).mockReturnValue({ data: lockedBonus, isLoading: false, isError: false });
+    (useAllBonusPredictions as ReturnType<typeof vi.fn>).mockReturnValue({ data: allBonusPicks, isLoading: false, isError: false });
+    const user = userEvent.setup();
+    wrap(<BonusPanel />);
+    await user.click(screen.getByRole("button", { name: /set tournament bonus picks/i }));
+    await user.click(screen.getByRole("button", { name: /view bonus picks by user/i }));
+    await user.type(screen.getByRole("textbox", { name: /search players/i }), "kir");
+    await user.click(screen.getByRole("menuitem", { name: /kiran/i }));
+
+    expect(screen.getByRole("button", { name: /select team for world cup winner/i })).toHaveTextContent("Argentina");
   });
 
   it("swaps the category rows to the selected user's picks", async () => {
