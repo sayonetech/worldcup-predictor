@@ -76,6 +76,57 @@ func (q *Queries) ListBonusPredictionsForUser(ctx context.Context, userID int64)
 	return items, nil
 }
 
+const listBonusPredictionsWithUsers = `-- name: ListBonusPredictionsWithUsers :many
+SELECT
+    u.id AS user_id, u.name, u.avatar_url,
+    bp.category, bp.ref_id, bp.points
+FROM bonus_predictions bp
+JOIN users u ON u.id = bp.user_id
+ORDER BY u.name, bp.category
+`
+
+type ListBonusPredictionsWithUsersRow struct {
+	UserID    int64                    `json:"user_id"`
+	Name      string                   `json:"name"`
+	AvatarUrl string                   `json:"avatar_url"`
+	Category  BonusPredictionsCategory `json:"category"`
+	RefID     int64                    `json:"ref_id"`
+	Points    sql.NullInt32            `json:"points"`
+}
+
+// Every user's bonus picks with the player's name/avatar. Used to reveal others'
+// picks once bonus locks at BONUS_LOCK_AT (privacy, spec §4). The INNER JOIN means
+// only users who actually set picks appear. Alphabetical by player, then category.
+func (q *Queries) ListBonusPredictionsWithUsers(ctx context.Context) ([]ListBonusPredictionsWithUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listBonusPredictionsWithUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListBonusPredictionsWithUsersRow
+	for rows.Next() {
+		var i ListBonusPredictionsWithUsersRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.Category,
+			&i.RefID,
+			&i.Points,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listBonusResults = `-- name: ListBonusResults :many
 SELECT category, ref_id FROM bonus_results
 `
